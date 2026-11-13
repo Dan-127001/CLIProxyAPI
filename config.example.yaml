@@ -185,6 +185,9 @@ routing:
   # (5-hour) window left. weight is the credential's "weight" (default 1). Credentials with
   # unknown windows get one request to learn them; providers without quota headers are shared
   # by weight alone. Combine it with session-affinity so running sessions stay in place.
+  # For a model with a quota window of its own (the Fable weekly allowance on Claude
+  # subscriptions), urgency is the lower of the credential's and the model's, so sessions for that
+  # model skip a credential whose allowance for it is used up.
   # soonest-reset spends the credential whose weekly quota window resets soonest, because
   # quota left over at a reset is lost. Reset times are read from the quota headers of
   # upstream responses (Claude and Codex subscriptions); a credential with unknown windows

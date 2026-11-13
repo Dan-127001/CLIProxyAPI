@@ -413,7 +413,15 @@ function nextUp(accounts) {
 // weight x urgency x headroom, and each account's share of new sessions.
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 const weightOf = (account) => (typeof account.weight === "number" ? account.weight : 1);
-function smartShares(accounts) {
+// True when the hub has seen the Fable allowance with a Fable response on one of the
+// accounts; only then does it apply the allowance to Fable sessions.
+function fableKnownToHub(accounts) {
+  return accounts.some((account) => Object.values(account.model_quotas || {}).some((reading) => reading && reading.signals &&
+    Object.keys(reading.signals).some((name) => name.toLowerCase() === "anthropic-ratelimit-unified-7d_oi-utilization")));
+}
+// With fable set, the shares are those of new Fable sessions: urgency is then capped by
+// the Fable weekly allowance, as in the hub.
+function smartShares(accounts, fable) {
   const now = Date.now();
   const out = {};
   let total = 0;
@@ -430,6 +438,10 @@ function smartShares(accounts) {
         const unused = long.used === null ? 1 : 1 - clamp(long.used, 0, 100) / 100;
         entry.urgency = unused / clamp((long.resetAt - now) / (long.minutes * 60000), 0.02, 1);
         if (short && short.used !== null && short.resetAt > now) entry.headroom = clamp((1 - clamp(short.used, 0, 100) / 100) / 0.25, 0, 1);
+      }
+      const allowance = fable && !entry.learning ? modelWindowsOf(account)[0] : null;
+      if (allowance && allowance.resetAt > now) {
+        entry.urgency = Math.min(entry.urgency, (1 - clamp(allowance.used, 0, 100) / 100) / clamp((allowance.resetAt - now) / (allowance.minutes * 60000), 0.02, 1));
       }
     }
     entry.score = Math.max(0, weight) * entry.urgency * entry.headroom;
@@ -495,7 +507,7 @@ function renderWindow(w) {
     '<div class="meter" data-tip="' + esc(tip) + '">' +
     (used === null ? "" : '<div class="fill" style="width:' + used + '%"></div>') +
     (elapsed === null ? "" : '<div class="pace" style="left:calc(' + elapsed + '% - 1px)"></div>') +
-    '</div><div class="window-sub">' + sub + "</div></div>";
+    '</div><div class="window-sub">' + sub + "</div>" + (w.note ? '<div class="window-sub">' + w.note + "</div>" : "") + "</div>";
 }
 function renderSpark(account) {
   const buckets = account.recent_requests || [];
@@ -511,7 +523,7 @@ function renderSpark(account) {
   const span = buckets.length ? buckets[0].time.split("-")[0] + "\u2013" + buckets[buckets.length - 1].time.split("-")[1] : "";
   return { html: '<div class="spark" role="img" aria-label="' + esc(total + " requests between " + span + ", " + failed + " failed") + '">' + bars + "</div>", total, failed, span };
 }
-function renderCard(account, next, shares) {
+function renderCard(account, next, shares, fableShares) {
   const shown = shownWindows(account);
   const windows = shown.windows;
   const spark = renderSpark(account);
@@ -530,7 +542,8 @@ function renderCard(account, next, shares) {
     nextPill = '<span class="chip" data-tip="' + esc(next.learning ? "Gets the next new session so the hub can read its limits." : "New sessions go to this account: its longest window resets first.") + '">Next up</span>';
   }
   const body = windows.length
-    ? windows.concat(shown.scoped).map(renderWindow).join("") + (shown.loadedAt ? '<div class="window-sub loaded-note">Read from the provider ' + esc(fmtAgo(shown.loadedAt)) + ". The hub reads the limits itself with the account's next request.</div>" : "")
+    ? windows.concat(shown.scoped.map((w) => (fableShares && fableShares[account.id] && /^Fable/.test(w.label || "")
+        ? Object.assign({}, w, { note: 'Gets <strong class="num">' + Math.round(fableShares[account.id].share * 100) + "%</strong> of new Fable sessions" }) : w))).map(renderWindow).join("") + (shown.loadedAt ? '<div class="window-sub loaded-note">Read from the provider ' + esc(fmtAgo(shown.loadedAt)) + ". The hub reads the limits itself with the account's next request.</div>" : "")
     : '<div class="window muted">' + (shown.loadedAt ? "The provider reports no open limit window for this account." : "No limits read yet. They appear after this account's first request.") +
       '<div><button type="button" class="btn small" data-load-limits="' + esc(account.id) + '">Load limits</button></div></div>';
   const off = isOff(account);
@@ -549,6 +562,7 @@ function renderAccounts(accounts) {
     const list = groups[provider];
     const smart = lastData && lastData.config && lastData.config.routing && lastData.config.routing.strategy === "smart-round-robin";
     const shares = smart ? smartShares(list) : null;
+    const fableShares = smart && fableKnownToHub(list) ? smartShares(list, true) : null;
     const next = smart ? null : nextUp(list);
     const now = Date.now();
     const weekly = list.map((a) => shownWindows(a).windows.slice(-1)[0]).filter((w) => w && w.used !== null && w.resetAt > now);
@@ -556,7 +570,7 @@ function renderAccounts(accounts) {
     const soonest = weekly.length ? Math.min(...weekly.map((w) => w.resetAt)) : null;
     const windowName = weekly.length && weekly.every((w) => w.minutes === 10080) ? "weekly" : "long-window";
     const summary = (left === null ? "" : pct(Math.round(left)) + " " + windowName + " quota left on average") + (soonest ? " &middot; next reset in " + fmtDuration(soonest - now) : "");
-    return '<div class="group-head"><h2>' + esc(providerName(provider)) + '<span class="count num">' + list.length + '</span></h2><span class="muted num">' + summary + '</span></div><div class="cards">' + list.map((a) => renderCard(a, next, shares)).join("") + "</div>";
+    return '<div class="group-head"><h2>' + esc(providerName(provider)) + '<span class="count num">' + list.length + '</span></h2><span class="muted num">' + summary + '</span></div><div class="cards">' + list.map((a) => renderCard(a, next, shares, fableShares)).join("") + "</div>";
   }).join("") || '<div class="card empty" style="margin-top:18px">No accounts are signed in to the hub.</div>';
 }
 function renderTiles(accounts, config) {
@@ -570,7 +584,7 @@ function renderTiles(accounts, config) {
   const keys = ((config && config["api-keys"]) || []).map((k) => { const m = /^sk-(.+)-[0-9a-f]{16,}$/.exec(k); return m ? m[1] : "unnamed"; });
   const tiles = [
     ["Accounts available", '<span class="num">' + usable + '</span> <span class="muted" style="font-size:15px;font-weight:400">of ' + accounts.length + "</span>", Object.keys(byProvider).map((p) => byProvider[p] + " " + providerName(p)).join(" · "), false],
-    ["Routing", esc(strategy), (routing.strategy === "smart-round-robin" ? "By weight, weekly urgency and 5-hour headroom. " : "") + (routing["session-affinity"] ? "Sessions keep their account for " + esc(routing["session-affinity-ttl"] || "1h") + " of inactivity." : "Sessions are not kept on one account."), true],
+    ["Routing", esc(strategy), (routing.strategy === "smart-round-robin" ? "By weight, weekly urgency and 5-hour headroom; Fable sessions also by the Fable allowance. " : "") + (routing["session-affinity"] ? "Sessions keep their account for " + esc(routing["session-affinity-ttl"] || "1h") + " of inactivity." : "Sessions are not kept on one account."), true],
     ["Requests " + esc(span), '<span class="num">' + total + "</span>", failed ? failed + " failed" : "none failed", false],
     ["Client keys", '<span class="num">' + keys.length + "</span>", esc(keys.join(", ")), false],
   ];

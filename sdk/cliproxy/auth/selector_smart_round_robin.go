@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +37,11 @@ const (
 // linearly to 0 when the window is exhausted.
 //
 // Weight is the credential's configured weight (default 1).
+//
+// Some models have a quota window of their own next to the credential's windows (the
+// Fable weekly allowance on Claude subscriptions). For a request to such a model, urgency
+// is the lower of the credential's and the model's, so sessions for that model avoid a
+// credential whose allowance for it is running out and skip one where it is used up.
 //
 // Selection is a smooth weighted round-robin over these scores, so a burst of parallel
 // sessions is spread instead of landing on one credential before its usage is observed
@@ -75,11 +82,13 @@ func (s *SmartRoundRobinSelector) Pick(ctx context.Context, provider, model stri
 	}
 	available = preferCodexWebsocketAuths(ctx, provider, available)
 
+	scoreModel := smartModelWithOwnWindow(smartRequestModel(model, opts), auths)
+
 	s.mu.Lock()
 	scores := make([]float64, len(available))
 	total := 0.0
 	for i, auth := range available {
-		score := smartRoundRobinScore(auth, now)
+		score := smartRoundRobinScore(auth, scoreModel, now)
 		if score.unknown && s.probes.due(auth.ID, now) {
 			s.probes.mark(auth.ID, now)
 			s.mu.Unlock()
@@ -177,8 +186,83 @@ func clampFloat(value, low, high float64) float64 {
 	return value
 }
 
-// smartRoundRobinScore scores one credential for a new session at now.
-func smartRoundRobinScore(auth *Auth, now time.Time) smartScore {
+// smartRequestModel returns the model a selection is for. With session affinity the
+// selector receives it directly; otherwise it is taken from the request metadata.
+func smartRequestModel(model string, opts cliproxyexecutor.Options) string {
+	if model = strings.TrimSpace(model); model != "" {
+		return model
+	}
+	requested, _ := opts.Metadata[cliproxyexecutor.RequestedModelMetadataKey].(string)
+	return strings.TrimSpace(requested)
+}
+
+// modelQuotaWindow extracts the model-specific quota window from a passive quota snapshot.
+// Claude subscriptions report the Fable weekly allowance as the "7d_oi" window.
+func modelQuotaWindow(provider string, quota QuotaState) (quotaWindowReset, bool) {
+	if !strings.EqualFold(strings.TrimSpace(provider), "claude") || len(quota.Signals) == 0 {
+		return quotaWindowReset{}, false
+	}
+	resetAt, okReset := parseQuotaResetTimestamp(quotaSignalValue(quota.Signals, "Anthropic-Ratelimit-Unified-7d_oi-Reset"))
+	used, okUsed := parseQuotaUsedShare(quotaSignalValue(quota.Signals, "Anthropic-Ratelimit-Unified-7d_oi-Utilization"), 1)
+	if !okReset || !okUsed {
+		return quotaWindowReset{}, false
+	}
+	return quotaWindowReset{length: 7 * 24 * time.Hour, resetAt: resetAt, used: used, usedKnown: true}, true
+}
+
+// modelStateQuota returns the quota snapshot auth keeps for model.
+func modelStateQuota(auth *Auth, model string) (QuotaState, bool) {
+	if auth == nil || model == "" {
+		return QuotaState{}, false
+	}
+	for stateModel, state := range auth.ModelStates {
+		if state != nil && sameCanonicalModelKey(stateModel, model) {
+			return state.Quota, true
+		}
+	}
+	return QuotaState{}, false
+}
+
+// smartModelWithOwnWindow returns model when responses for it are known to carry a
+// model-specific quota window on one of the candidates, and "" otherwise. The window is
+// only reported with responses for such a model, so a credential-level snapshot holding
+// it must not be applied to requests for other models.
+func smartModelWithOwnWindow(model string, auths []*Auth) string {
+	if model == "" {
+		return ""
+	}
+	for _, auth := range auths {
+		if quota, ok := modelStateQuota(auth, model); ok {
+			if _, okWindow := modelQuotaWindow(auth.Provider, quota); okWindow {
+				return model
+			}
+		}
+	}
+	return ""
+}
+
+// smartModelWindow returns auth's latest reading of the model-specific window: from the
+// model's own snapshot or from the credential's, whichever was observed last.
+func smartModelWindow(auth *Auth, model string) (quotaWindowReset, bool) {
+	var best quotaWindowReset
+	var bestAt time.Time
+	found := false
+	consider := func(quota QuotaState) {
+		window, ok := modelQuotaWindow(auth.Provider, quota)
+		if ok && (!found || quota.ObservedAt.After(bestAt)) {
+			best, bestAt, found = window, quota.ObservedAt, true
+		}
+	}
+	if quota, ok := modelStateQuota(auth, model); ok {
+		consider(quota)
+	}
+	consider(auth.Quota)
+	return best, found
+}
+
+// smartRoundRobinScore scores one credential for a new session at now. model is the
+// request's model when it has a quota window of its own, and "" otherwise.
+func smartRoundRobinScore(auth *Auth, model string, now time.Time) smartScore {
 	if auth == nil {
 		return smartScore{}
 	}
@@ -193,10 +277,24 @@ func smartRoundRobinScore(auth *Auth, now time.Time) smartScore {
 		return smartScore{value: weight, unknown: true}
 	}
 
+	// modelUrgency caps the urgency by the model's own window. A reading whose window has
+	// rolled over says nothing about the current one and is ignored.
+	modelUrgency := func(urgency float64) float64 {
+		if model == "" {
+			return urgency
+		}
+		window, ok := smartModelWindow(auth, model)
+		if !ok || !window.resetAt.After(now) {
+			return urgency
+		}
+		timeLeft := clampFloat(float64(window.resetAt.Sub(now))/float64(window.length), smartMinTimeLeftShare, 1)
+		return math.Min(urgency, (1-window.used)/timeLeft)
+	}
+
 	windows := quotaWindowResets(auth.Provider, auth.Quota.Signals, auth.Quota.ObservedAt)
 	if len(windows) == 0 {
-		// Observed, but upstream reports no window to pace against.
-		return smartScore{value: weight}
+		// Observed, but upstream reports no credential window to pace against.
+		return smartScore{value: weight * modelUrgency(1)}
 	}
 	long, short := windows[0], windows[0]
 	for _, window := range windows[1:] {
@@ -217,7 +315,7 @@ func smartRoundRobinScore(auth *Auth, now time.Time) smartScore {
 		unused = 1 - long.used
 	}
 	timeLeft := clampFloat(float64(long.resetAt.Sub(now))/float64(long.length), smartMinTimeLeftShare, 1)
-	urgency := unused / timeLeft
+	urgency := modelUrgency(unused / timeLeft)
 
 	headroom := 1.0
 	if short.length < long.length && short.usedKnown && short.resetAt.After(now) {

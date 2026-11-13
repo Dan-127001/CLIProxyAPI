@@ -78,7 +78,7 @@ func TestSmartRoundRobinScore(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := smartRoundRobinScore(test.auth, now)
+			got := smartRoundRobinScore(test.auth, "", now)
 			if math.Abs(got.value-test.want) > 1e-9 || got.unknown != test.wantUnknown {
 				t.Fatalf("score = %+v, want value %v unknown %v", got, test.want, test.wantUnknown)
 			}
@@ -219,5 +219,130 @@ func TestSmartRoundRobinSelector_SessionAffinityKeepsBoundCredential(t *testing.
 	}
 	if got := pick("session-2"); got != "b" {
 		t.Fatalf("new session auth.ID = %q, want %q", got, "b")
+	}
+}
+
+const smartTestFableModel = "claude-fable-5-2"
+
+// withFableReading records a Fable weekly allowance reading on the credential's model
+// state, as a response for that model leaves it. fableUsed is the used share; the window
+// resets with the weekly window. observedAgo is how long before the test clock it was read.
+func withFableReading(auth *Auth, fableUsed float64, observedAgo time.Duration) *Auth {
+	if auth.ModelStates == nil {
+		auth.ModelStates = make(map[string]*ModelState)
+	}
+	auth.ModelStates[smartTestFableModel] = &ModelState{Status: StatusActive, Quota: QuotaState{
+		ObservedAt: soonestResetTestNow.Add(-observedAgo),
+		Signals: map[string]string{
+			"Anthropic-Ratelimit-Unified-7d_oi-Utilization": strconv.FormatFloat(fableUsed, 'f', -1, 64),
+			"Anthropic-Ratelimit-Unified-7d_oi-Reset":       auth.Quota.Signals["Anthropic-Ratelimit-Unified-7d-Reset"],
+		},
+	}}
+	return auth
+}
+
+func TestSmartRoundRobinScore_ModelWindow(t *testing.T) {
+	t.Parallel()
+
+	now := soonestResetTestNow
+	// Weekly window on pace (score 1) for every case; only the Fable allowance differs.
+	onPace := func() *Auth { return claudeAuthWithUsage("a", 0.3, 0.7, -1) }
+
+	rolledOver := withFableReading(onPace(), 1, time.Minute)
+	rolledOver.ModelStates[smartTestFableModel].Quota.Signals["Anthropic-Ratelimit-Unified-7d_oi-Reset"] = unixSeconds(now.Add(-time.Hour))
+
+	// The credential's own snapshot is newer than the model's and carries the window too.
+	newerOnCredential := withFableReading(onPace(), 0.3, time.Hour)
+	newerOnCredential.Quota.Signals["Anthropic-Ratelimit-Unified-7d_oi-Utilization"] = "0.86"
+	newerOnCredential.Quota.Signals["Anthropic-Ratelimit-Unified-7d_oi-Reset"] = newerOnCredential.Quota.Signals["Anthropic-Ratelimit-Unified-7d-Reset"]
+
+	tests := []struct {
+		name  string
+		auth  *Auth
+		model string
+		want  float64
+	}{
+		{"Fable allowance with more room than the week does not raise the score", withFableReading(onPace(), 0.1, time.Minute), smartTestFableModel, 1},
+		{"Fable allowance running out lowers the score", withFableReading(onPace(), 0.86, time.Minute), smartTestFableModel, 0.2},
+		{"Fable allowance used up", withFableReading(onPace(), 1, time.Minute), smartTestFableModel, 0},
+		{"other models ignore the Fable allowance", withFableReading(onPace(), 1, time.Minute), "", 1},
+		{"no Fable reading yet", onPace(), smartTestFableModel, 1},
+		{"reading from a window that has rolled over", rolledOver, smartTestFableModel, 1},
+		{"newer reading on the credential wins", newerOnCredential, smartTestFableModel, 0.2},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := smartRoundRobinScore(test.auth, test.model, now)
+			if math.Abs(got.value-test.want) > 1e-9 || got.unknown {
+				t.Fatalf("score = %+v, want value %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestSmartRoundRobinSelectorPick_FableSessionsAvoidUsedUpAllowance(t *testing.T) {
+	t.Parallel()
+
+	now := soonestResetTestNow
+	selector := newSmartRoundRobinTestSelector(&now)
+	auths := []*Auth{
+		// "a" is by far the most urgent on its weekly window, but its Fable allowance is used up.
+		withFableReading(claudeAuthWithUsage("a", 0, 1.0/7, -1), 1, time.Minute),
+		withFableReading(claudeAuthWithUsage("b", 0.3, 0.7, -1), 0.2, time.Minute),
+	}
+
+	pick := func(model string, viaMetadata bool) string {
+		t.Helper()
+		opts := cliproxyexecutor.Options{}
+		arg := model
+		if viaMetadata {
+			// Without session affinity the selector gets no model argument.
+			opts.Metadata = map[string]any{cliproxyexecutor.RequestedModelMetadataKey: model}
+			arg = ""
+		}
+		got, err := selector.Pick(context.Background(), "claude", arg, opts, auths)
+		if err != nil {
+			t.Fatalf("Pick() error = %v", err)
+		}
+		return got.ID
+	}
+
+	for i := 0; i < 6; i++ {
+		if got := pick(smartTestFableModel, i%2 == 1); got != "b" {
+			t.Fatalf("Fable pick #%d auth.ID = %q, want %q", i, got, "b")
+		}
+	}
+	// Other models still follow the weekly window: 7 of 8 sessions go to "a".
+	counts := map[string]int{}
+	for i := 0; i < 16; i++ {
+		counts[pick("claude-opus-5-5", false)]++
+	}
+	if counts["a"] != 14 || counts["b"] != 2 {
+		t.Fatalf("Opus picks = %v, want 14 for a and 2 for b", counts)
+	}
+}
+
+func TestSmartRoundRobinSelectorPick_CredentialSnapshotNotAppliedToOtherModels(t *testing.T) {
+	t.Parallel()
+
+	now := soonestResetTestNow
+	selector := newSmartRoundRobinTestSelector(&now)
+	// The last response of "a" was a Fable one, so its credential snapshot carries the used-up
+	// Fable window. No candidate has a model reading for Opus, so Opus requests ignore it.
+	a := claudeAuthWithUsage("a", 0.3, 0.7, -1)
+	a.Quota.Signals["Anthropic-Ratelimit-Unified-7d_oi-Utilization"] = "1"
+	a.Quota.Signals["Anthropic-Ratelimit-Unified-7d_oi-Reset"] = a.Quota.Signals["Anthropic-Ratelimit-Unified-7d-Reset"]
+	auths := []*Auth{a, claudeAuthWithUsage("b", 0.3, 0.7, -1)}
+
+	counts := map[string]int{}
+	for i := 0; i < 8; i++ {
+		got, err := selector.Pick(context.Background(), "claude", "claude-opus-5-5", cliproxyexecutor.Options{}, auths)
+		if err != nil {
+			t.Fatalf("Pick() error = %v", err)
+		}
+		counts[got.ID]++
+	}
+	if counts["a"] != 4 || counts["b"] != 4 {
+		t.Fatalf("Opus picks = %v, want 4 each", counts)
 	}
 }
