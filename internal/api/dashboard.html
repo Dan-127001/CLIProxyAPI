@@ -75,6 +75,8 @@
     background: var(--surface); border: 1px solid var(--border); white-space: nowrap;
   }
   .btn:hover { border-color: var(--text-muted); }
+  .btn.small { height: 28px; padding: 0 10px; font-size: 12.5px; margin-top: 10px; }
+  .loaded-note { margin-top: 12px; }
   .btn.ghost { background: transparent; border-color: transparent; color: var(--text-secondary); }
   .btn.ghost:hover { background: var(--pill-bg); }
 
@@ -491,7 +493,8 @@ function renderSpark(account) {
   return { html: '<div class="spark" role="img" aria-label="' + esc(total + " requests between " + span + ", " + failed + " failed") + '">' + bars + "</div>", total, failed, span };
 }
 function renderCard(account, next, shares) {
-  const windows = windowsOf(account);
+  const shown = shownWindows(account);
+  const windows = shown.windows;
   const spark = renderSpark(account);
   const observed = account.quota && account.quota.observed_at ? Date.parse(account.quota.observed_at) : 0;
   let nextPill = "";
@@ -507,14 +510,17 @@ function renderCard(account, next, shares) {
   } else if (next && next.id === account.id) {
     nextPill = '<span class="chip" data-tip="' + esc(next.learning ? "Gets the next new session so the hub can read its limits." : "New sessions go to this account: its longest window resets first.") + '">Next up</span>';
   }
-  const body = windows.length ? windows.map(renderWindow).join("") : '<div class="window muted">No limits read yet. They appear after this account\'s first request.</div>';
+  const body = windows.length
+    ? windows.map(renderWindow).join("") + (shown.loadedAt ? '<div class="window-sub loaded-note">Read from the provider ' + esc(fmtAgo(shown.loadedAt)) + ". The hub reads the limits itself with the account's next request.</div>" : "")
+    : '<div class="window muted">' + (shown.loadedAt ? "The provider reports no open limit window for this account." : "No limits read yet. They appear after this account's first request.") +
+      '<div><button type="button" class="btn small" data-load-limits="' + esc(account.id) + '">Load limits</button></div></div>';
   const off = isOff(account);
   const toggle = '<button type="button" class="switch" role="switch" aria-checked="' + !off + '" data-account="' + id + '" data-off="' + off + '" aria-label="' + esc("Use " + (account.email || account.name) + " for requests") + '" data-tip="' +
     esc(off ? "Off: the hub does not use this account. Click to turn it on." : "On: the hub uses this account. Click to turn it off; running sessions move to another account.") + '"><span class="knob"></span></button>';
   return '<article class="card' + (off ? " off" : "") + '"><div class="card-head"><span class="name">' + esc(account.email || account.label || account.name) + '</span><span class="head-right">' + nextPill + statusPill(account) + toggle + "</span></div>" +
     '<div class="windows">' + body + "</div>" + renderResets(account) +
     '<div class="card-foot"><div class="foot-text" data-tip="' + esc((account.success || 0) + " succeeded and " + (account.failed || 0) + " failed since the hub started") + '"><div class="num"><strong>' + spark.total + "</strong> " + (spark.total === 1 ? "request" : "requests") + ' <span class="muted">' + esc(spark.span) + "</span>" + (spark.failed ? " &middot; " + spark.failed + " failed" : "") + "</div>" +
-    '<div class="muted small">' + (observed ? "Limits read " + esc(fmtAgo(observed)) : "Limits not read yet") + "</div></div>" + spark.html + weightField + "</div></article>";
+    '<div class="muted small">' + (observed ? "Limits read " + esc(fmtAgo(observed)) : shown.loadedAt ? "Limits loaded " + esc(fmtAgo(shown.loadedAt)) : "Limits not read yet") + "</div></div>" + spark.html + weightField + "</div></article>";
 }
 function renderAccounts(accounts) {
   const groups = {};
@@ -526,7 +532,7 @@ function renderAccounts(accounts) {
     const shares = smart ? smartShares(list) : null;
     const next = smart ? null : nextUp(list);
     const now = Date.now();
-    const weekly = list.map((a) => windowsOf(a).slice(-1)[0]).filter((w) => w && w.used !== null && w.resetAt > now);
+    const weekly = list.map((a) => shownWindows(a).windows.slice(-1)[0]).filter((w) => w && w.used !== null && w.resetAt > now);
     const left = weekly.length ? weekly.reduce((sum, w) => sum + (100 - w.used), 0) / weekly.length : null;
     const soonest = weekly.length ? Math.min(...weekly.map((w) => w.resetAt)) : null;
     const windowName = weekly.length && weekly.every((w) => w.minutes === 10080) ? "weekly" : "long-window";
@@ -791,6 +797,50 @@ async function readResetItems(account) {
   if (!okStatus(response)) throw new Error("HTTP " + response.status);
   return codexResetItems(response.json, account, now);
 }
+// Limits read straight from the provider when asked for, shown while the hub has no reading
+// of its own. Routing is unaffected: the hub only trusts what its own requests report.
+const loadedLimits = {};
+async function readProviderLimits(account) {
+  if (account.provider === "claude") {
+    const response = await upstream(account, CLAUDE_API + "/api/oauth/usage?skip_spend=1", claudeHeaders(false));
+    if (!okStatus(response)) throw new Error("HTTP " + response.status);
+    return [["five_hour", 300], ["seven_day", 10080]]
+      .map(([key, minutes]) => ({ minutes, window: response.json[key] }))
+      .filter((entry) => entry.window && typeof entry.window.utilization === "number")
+      .map((entry) => ({ minutes: entry.minutes, used: entry.window.utilization, resetAt: entry.window.resets_at ? Date.parse(entry.window.resets_at) : null }));
+  }
+  const response = await upstream(account, "https://chatgpt.com/backend-api/wham/usage", codexHeaders(account));
+  if (!okStatus(response)) throw new Error("HTTP " + response.status);
+  const limit = response.json.rate_limit || {};
+  return [limit.primary_window, limit.secondary_window]
+    .filter((w) => w && typeof w.used_percent === "number" && w.limit_window_seconds > 0)
+    .map((w) => ({ minutes: w.limit_window_seconds / 60, used: w.used_percent, resetAt: w.reset_at ? w.reset_at * 1000 : null }))
+    .sort((a, b) => a.minutes - b.minutes);
+}
+function shownWindows(account) {
+  const own = windowsOf(account);
+  if (own.length) return { windows: own, loadedAt: 0 };
+  const loaded = loadedLimits[account.id];
+  return loaded ? { windows: loaded.windows, loadedAt: loaded.at } : { windows: [], loadedAt: 0 };
+}
+async function loadLimits(account) {
+  loadedLimits[account.id] = { windows: await readProviderLimits(account), at: Date.now() };
+  render();
+}
+$("accounts").addEventListener("click", async (event) => {
+  const button = event.target.closest ? event.target.closest("button[data-load-limits]") : null;
+  if (!button || button.disabled || !lastData) return;
+  const account = lastData.accounts.find((entry) => entry.id === button.getAttribute("data-load-limits"));
+  if (!account) return;
+  button.disabled = true;
+  button.textContent = "Loading…";
+  try { await loadLimits(account); }
+  catch (error) {
+    if (error instanceof AuthError) { showLogin(true); return; }
+    notify("critical", "The limits of " + (account.email || account.name) + " could not be loaded (" + error.message + ").");
+    render();
+  }
+});
 async function loadResets() {
   if (!lastData || resetsLoading) return;
   resetsLoading = true;
