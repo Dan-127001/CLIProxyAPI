@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hub dashboard</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f4f3f0;
+    --surface: #fcfcfb;
+    --border: #e3e1dc;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #7a7873;
+    --meter-fill: #2a78d6;
+    --meter-track: #cde2fb;
+    --pace-tick: #0b0b0b;
+    --good: #0ca30c;
+    --warning: #fab219;
+    --serious: #ec835a;
+    --critical: #d03b3b;
+    --pill-bg: #eeece8;
+    --focus: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #111110;
+      --surface: #1a1a19;
+      --border: #30302d;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --text-muted: #8f8e86;
+      --meter-fill: #3987e5;
+      --meter-track: #12365f;
+      --pace-tick: #f0efec;
+      --pill-bg: #2a2a28;
+      --focus: #6da7ec;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-primary);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 20px; margin: 0; font-weight: 650; }
+  h2 { font-size: 15px; margin: 28px 0 10px; font-weight: 650; }
+  a { color: inherit; }
+  button, input { font: inherit; color: inherit; }
+  button {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 12px; cursor: pointer;
+  }
+  button:hover { border-color: var(--text-muted); }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .muted { color: var(--text-muted); }
+  .secondary { color: var(--text-secondary); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+  header.top .grow { flex: 1 1 auto; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    background: var(--pill-bg); border-radius: 999px; padding: 2px 10px; font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .pill .ico { font-size: 11px; line-height: 1; }
+  .pill.good .ico { color: var(--good); }
+  .pill.warning .ico { color: var(--warning); }
+  .pill.serious .ico { color: var(--serious); }
+  .pill.critical .ico { color: var(--critical); }
+  .pill.next { color: var(--text-primary); border: 1px solid var(--meter-fill); background: transparent; }
+  .pill.next .ico { color: var(--meter-fill); }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 18px; }
+  .tile, .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .tile { padding: 14px 16px; min-width: 0; }
+  .tile .label { color: var(--text-secondary); font-size: 12.5px; }
+  .tile .value { font-size: 24px; font-weight: 650; margin-top: 2px; overflow-wrap: anywhere; }
+  .tile .value.text { font-size: 18px; line-height: 1.3; padding: 4px 0 2px; }
+  .tile .sub { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; overflow-wrap: anywhere; }
+
+  .group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 28px 0 10px; }
+  .group-head h2 { margin: 0; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+  .card { padding: 16px; min-width: 0; }
+  .card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+  .card-head .name { font-weight: 650; font-size: 15px; overflow-wrap: anywhere; margin-right: auto; }
+  .window { margin-top: 14px; }
+  .window-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .window-top .wname { font-weight: 600; }
+  .meter { position: relative; height: 8px; border-radius: 4px; background: var(--meter-track); margin: 6px 0 5px; }
+  .meter .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--meter-fill); min-width: 0; }
+  .meter .pace { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--pace-tick); border-radius: 1px; box-shadow: 0 0 0 2px var(--surface); }
+  .window-sub { color: var(--text-muted); font-size: 12.5px; }
+  .card-foot { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .spark { display: flex; align-items: flex-end; gap: 2px; height: 34px; }
+  .spark .bar { width: 6px; border-radius: 3px 3px 0 0; background: var(--meter-fill); }
+  .spark .bar.zero { height: 2px; background: var(--border); border-radius: 1px; }
+  .spark .slot { display: flex; align-items: flex-end; height: 34px; padding: 0; cursor: default; }
+  .legend { color: var(--text-muted); font-size: 12.5px; margin-top: 10px; display: flex; align-items: center; gap: 8px; }
+  .legend .tick { display: inline-block; width: 2px; height: 12px; background: var(--pace-tick); border-radius: 1px; }
+
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; }
+  th, td { text-align: left; padding: 8px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { font-weight: 600; color: var(--text-secondary); font-size: 12.5px; }
+  tr:last-child td { border-bottom: 0; }
+  td.right, th.right { text-align: right; }
+  .empty { padding: 22px 16px; color: var(--text-muted); }
+
+  .banner { margin-top: 14px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--critical); background: var(--surface); }
+  #login { max-width: 420px; margin: 12vh auto 0; }
+  #login .card { padding: 22px; }
+  #login input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--page); margin: 10px 0 12px; }
+  #tip {
+    position: fixed; z-index: 10; pointer-events: none; display: none; max-width: 280px;
+    background: var(--text-primary); color: var(--surface); padding: 6px 9px; border-radius: 7px; font-size: 12.5px;
+  }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <section id="login" hidden>
+    <div class="card">
+      <h1>Hub dashboard</h1>
+      <p class="secondary">Enter the hub's management key. It is stored in this browser only.</p>
+      <form id="login-form">
+        <label for="key-input" class="secondary">Management key</label>
+        <input id="key-input" type="password" autocomplete="off" required>
+        <button type="submit">Open dashboard</button>
+        <span id="login-error" class="pill critical" hidden><span class="ico">&#10005;</span>Key not accepted</span>
+      </form>
+    </div>
+  </section>
+
+  <section id="app" hidden>
+    <header class="top">
+      <h1>CLIProxyAPI hub</h1>
+      <span id="hub-status" class="pill"><span class="ico">&#9679;</span>Connecting</span>
+      <span class="grow"></span>
+      <span id="updated" class="muted num"></span>
+      <button id="refresh" type="button">Refresh</button>
+      <a href="/management.html"><button type="button">Management panel</button></a>
+      <button id="logout" type="button">Forget key</button>
+    </header>
+    <div id="banner" class="banner" hidden></div>
+    <div id="tiles" class="tiles"></div>
+    <div id="accounts"></div>
+    <div class="legend"><span class="tick"></span>Mark on a bar: how much of that window's time has passed. A bar well short of the mark means quota will expire unused.</div>
+    <h2>Recent requests</h2>
+    <div id="activity" class="table-wrap"></div>
+  </section>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script>
+"use strict";
+// Names for the "Client" column, by client address. An optional dashboard.json next to
+// management.html ({"clients": {"<address>": "<name>"}}) names the machines of an installation.
+let CLIENT_NAMES = { "127.0.0.1": "hub machine", "::1": "hub machine" };
+async function loadClientNames() {
+  try {
+    const response = await fetch("/dashboard.json", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (data && data.clients && typeof data.clients === "object") CLIENT_NAMES = Object.assign({}, CLIENT_NAMES, data.clients);
+  } catch (e) {}
+}
+const API = "/v0/management";
+const REFRESH_MS = 20000;
+const KEY_STORE = "hubDashboardKey";
+const STRATEGY_NAMES = {
+  "soonest-reset": "Soonest reset first",
+  "round-robin": "Round robin",
+  "weighted-round-robin": "Weighted round robin",
+  "fill-first": "Fill first",
+};
+
+const $ = (id) => document.getElementById(id);
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let key = "";
+let lastOk = 0;
+let logLines = [];
+let logLatest = 0;
+let timer = null;
+
+function loadKey() {
+  const fromHash = /[#&]key=([^&]+)/.exec(location.hash);
+  if (fromHash) {
+    key = decodeURIComponent(fromHash[1]);
+    try { localStorage.setItem(KEY_STORE, key); } catch (e) {}
+    history.replaceState(null, "", location.pathname + location.search);
+    return;
+  }
+  try { key = localStorage.getItem(KEY_STORE) || ""; } catch (e) { key = ""; }
+}
+
+class AuthError extends Error {}
+async function api(path) {
+  const response = await fetch(API + path, { headers: { Authorization: "Bearer " + key }, cache: "no-store" });
+  if (response.status === 401 || response.status === 403) throw new AuthError();
+  if (!response.ok) throw new Error("HTTP " + response.status);
+  return response.json();
+}
+
+// ---------- quota windows ----------
+function signalsOf(account) {
+  const out = {};
+  const signals = (account.quota && account.quota.signals) || {};
+  for (const name of Object.keys(signals)) out[name.toLowerCase()] = String(signals[name]).trim();
+  return out;
+}
+function windowLabel(minutes) {
+  if (minutes === 300) return "5-hour";
+  if (minutes === 10080) return "Weekly";
+  if (minutes % 1440 === 0) return minutes / 1440 + "-day";
+  return Math.round(minutes / 60) + "-hour";
+}
+function windowsOf(account) {
+  const s = signalsOf(account);
+  const observed = account.quota && account.quota.observed_at ? Date.parse(account.quota.observed_at) : 0;
+  const list = [];
+  if (account.provider === "claude") {
+    for (const [id, minutes] of [["5h", 300], ["7d", 10080]]) {
+      const util = parseFloat(s["anthropic-ratelimit-unified-" + id + "-utilization"]);
+      const reset = parseFloat(s["anthropic-ratelimit-unified-" + id + "-reset"]);
+      if (Number.isNaN(util) && Number.isNaN(reset)) continue;
+      list.push({ minutes, used: Number.isNaN(util) ? null : util * 100, resetAt: reset > 0 ? reset * 1000 : null });
+    }
+  } else if (account.provider === "codex") {
+    for (const name of ["primary", "secondary"]) {
+      const minutes = parseFloat(s["x-codex-" + name + "-window-minutes"]);
+      if (!(minutes > 0)) continue;
+      const used = parseFloat(s["x-codex-" + name + "-used-percent"]);
+      let reset = parseFloat(s["x-codex-" + name + "-reset-at"]) * 1000;
+      if (!(reset > 0)) {
+        const after = parseFloat(s["x-codex-" + name + "-reset-after-seconds"]);
+        reset = after >= 0 && observed ? observed + after * 1000 : NaN;
+      }
+      list.push({ minutes, used: Number.isNaN(used) ? null : used, resetAt: reset > 0 ? reset : null });
+    }
+  }
+  list.sort((a, b) => a.minutes - b.minutes);
+  return list;
+}
+function activeCooldown(account) {
+  const now = Date.now();
+  return (account.cooldowns || []).find((c) => c.scope !== "model" && Date.parse(c.retry_at) > now) || null;
+}
+function isUsable(account) {
+  return !account.disabled && !account.unavailable && account.status !== "disabled" && !activeCooldown(account);
+}
+// Mirrors the hub's "soonest-reset" order: unknown windows first (one request to learn
+// them), then the soonest reset of the longest window, the shortest window breaks ties.
+function nextUp(accounts) {
+  const now = Date.now();
+  let best = null;
+  for (const account of accounts.filter(isUsable)) {
+    const windows = windowsOf(account).filter((w) => w.resetAt);
+    const long = windows[windows.length - 1];
+    const short = windows.length > 1 ? windows[0] : null;
+    let rank;
+    if (!account.quota || !account.quota.observed_at || (long && long.resetAt <= now)) rank = [0, 0, 0];
+    else if (long) rank = [1, long.resetAt, short && short.resetAt > now ? short.resetAt : Infinity];
+    else rank = [2, 0, 0];
+    if (!best || rank[0] < best.rank[0] || (rank[0] === best.rank[0] && (rank[1] < best.rank[1] || (rank[1] === best.rank[1] && rank[2] < best.rank[2])))) {
+      best = { account, rank };
+    }
+  }
+  return best && best.rank[0] < 2 ? { id: best.account.id, learning: best.rank[0] === 0 } : null;
+}
+
+// ---------- formatting ----------
+function fmtDuration(ms) {
+  const minutes = Math.max(0, Math.round(ms / 60000));
+  if (minutes < 60) return minutes + "m";
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours + "h " + (minutes % 60) + "m";
+  return Math.floor(hours / 24) + "d " + (hours % 24) + "h";
+}
+function fmtWhen(ms) {
+  const date = new Date(ms);
+  const sameDay = date.toDateString() === new Date().toDateString();
+  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return sameDay ? "today " + time : date.toLocaleDateString([], { weekday: "short" }) + " " + time;
+}
+function fmtAgo(ms) {
+  const seconds = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (seconds < 90) return seconds + "s ago";
+  return fmtDuration(seconds * 1000) + " ago";
+}
+const pct = (value) => (Math.round(value * 10) / 10).toString().replace(/\.0$/, "") + "%";
+const providerName = (p) => ({ claude: "Claude", codex: "Codex", xai: "Grok", antigravity: "Antigravity" }[p] || p);
+
+// ---------- rendering ----------
+function statusPill(account) {
+  const cooldown = activeCooldown(account);
+  if (account.disabled || account.status === "disabled") return '<span class="pill serious"><span class="ico">&#9208;</span>Disabled</span>';
+  if (cooldown) return '<span class="pill warning"><span class="ico">&#9203;</span>Paused ' + esc(fmtDuration(Date.parse(cooldown.retry_at) - Date.now())) + (cooldown.reason ? " &middot; " + esc(cooldown.reason.replace(/_/g, " ")) : "") + "</span>";
+  if (account.unavailable || (account.status && account.status !== "active")) return '<span class="pill critical"><span class="ico">&#10005;</span>' + esc(account.status_message || account.status || "Unavailable") + "</span>";
+  return '<span class="pill good"><span class="ico">&#10003;</span>Active</span>';
+}
+function renderWindow(w) {
+  const now = Date.now();
+  const stale = w.resetAt && w.resetAt <= now;
+  const used = stale || w.used === null ? null : Math.min(100, Math.max(0, w.used));
+  const lengthMs = w.minutes * 60000;
+  const elapsed = w.resetAt && !stale ? Math.min(100, Math.max(0, (1 - (w.resetAt - now) / lengthMs) * 100)) : null;
+  const right = used === null ? '<span class="muted">no reading</span>' : '<span class="num"><strong>' + pct(used) + "</strong> used</span>";
+  let sub;
+  if (stale) sub = "Reset since the last reading; the next request refreshes it.";
+  else if (w.resetAt) sub = "Resets in " + fmtDuration(w.resetAt - now) + " &middot; " + esc(fmtWhen(w.resetAt)) + (used === null ? "" : " &middot; " + pct(100 - used) + " left");
+  else sub = "No reset time reported.";
+  const tip = used === null ? "" : pct(used) + " used" + (elapsed === null ? "" : ", " + pct(elapsed) + " of the window's time has passed");
+  return '<div class="window"><div class="window-top"><span class="wname">' + esc(windowLabel(w.minutes)) + "</span>" + right + "</div>" +
+    '<div class="meter" data-tip="' + esc(tip) + '">' +
+    (used === null ? "" : '<div class="fill" style="width:' + used + '%"></div>') +
+    (elapsed === null ? "" : '<div class="pace" style="left:calc(' + elapsed + '% - 1px)"></div>') +
+    '</div><div class="window-sub">' + sub + "</div></div>";
+}
+function renderSpark(account) {
+  const buckets = account.recent_requests || [];
+  const max = Math.max(1, ...buckets.map((b) => (b.success || 0) + (b.failed || 0)));
+  let total = 0, failed = 0;
+  const bars = buckets.map((b) => {
+    const n = (b.success || 0) + (b.failed || 0);
+    total += n; failed += b.failed || 0;
+    const tip = b.time + " \u00b7 " + n + (n === 1 ? " request" : " requests") + (b.failed ? ", " + b.failed + " failed" : "");
+    const bar = n === 0 ? '<span class="bar zero"></span>' : '<span class="bar" style="height:' + Math.max(4, Math.round((n / max) * 34)) + 'px"></span>';
+    return '<span class="slot" data-tip="' + esc(tip) + '">' + bar + "</span>";
+  }).join("");
+  const span = buckets.length ? buckets[0].time.split("-")[0] + "\u2013" + buckets[buckets.length - 1].time.split("-")[1] : "";
+  return { html: '<div class="spark" role="img" aria-label="' + esc(total + " requests between " + span + ", " + failed + " failed") + '">' + bars + "</div>", total, failed, span };
+}
+function renderCard(account, next) {
+  const windows = windowsOf(account);
+  const spark = renderSpark(account);
+  const observed = account.quota && account.quota.observed_at ? Date.parse(account.quota.observed_at) : 0;
+  const nextPill = next && next.id === account.id
+    ? '<span class="pill next" data-tip="' + esc(next.learning ? "Gets the next new session so the hub can read its limits." : "New sessions go to this account: its longest window resets first.") + '"><span class="ico">&#9654;</span>' + (next.learning ? "Next up (reading limits)" : "Next up") + "</span>"
+    : "";
+  const body = windows.length ? windows.map(renderWindow).join("") : '<div class="window muted">No limits read yet. They appear after this account\'s first request.</div>';
+  return '<article class="card"><div class="card-head"><span class="name">' + esc(account.email || account.label || account.name) + "</span>" + nextPill + statusPill(account) + "</div>" + body +
+    '<div class="card-foot"><div><div class="secondary num"><strong>' + spark.total + "</strong> " + (spark.total === 1 ? "request " : "requests ") + esc(spark.span) + (spark.failed ? " &middot; " + spark.failed + " failed" : "") + "</div>" +
+    '<div class="muted" style="font-size:12.5px">' + (observed ? "Limits read " + esc(fmtAgo(observed)) : "Limits not read yet") + " &middot; " + (account.success || 0) + " ok / " + (account.failed || 0) + " failed since hub start</div></div>" + spark.html + "</div></article>";
+}
+function renderAccounts(accounts) {
+  const groups = {};
+  for (const account of accounts) (groups[account.provider] = groups[account.provider] || []).push(account);
+  const order = Object.keys(groups).sort((a, b) => (a === "claude" ? -1 : b === "claude" ? 1 : a.localeCompare(b)));
+  $("accounts").innerHTML = order.map((provider) => {
+    const list = groups[provider];
+    const next = nextUp(list);
+    const now = Date.now();
+    const weekly = list.map((a) => windowsOf(a).slice(-1)[0]).filter((w) => w && w.used !== null && w.resetAt > now);
+    const left = weekly.length ? weekly.reduce((sum, w) => sum + (100 - w.used), 0) / weekly.length : null;
+    const soonest = weekly.length ? Math.min(...weekly.map((w) => w.resetAt)) : null;
+    const summary = (left === null ? "" : pct(left) + " of the long window left on average") + (soonest ? " &middot; next reset in " + fmtDuration(soonest - now) : "");
+    return '<div class="group-head"><h2>' + esc(providerName(provider)) + ' <span class="muted" style="font-weight:400">' + list.length + (list.length === 1 ? " account" : " accounts") + '</span></h2><span class="secondary num">' + summary + '</span></div><div class="cards">' + list.map((a) => renderCard(a, next)).join("") + "</div>";
+  }).join("") || '<div class="card empty" style="margin-top:18px">No accounts are signed in to the hub.</div>';
+}
+function renderTiles(accounts, config) {
+  const routing = (config && config.routing) || {};
+  const strategy = STRATEGY_NAMES[routing.strategy] || routing.strategy || "Round robin";
+  const usable = accounts.filter(isUsable).length;
+  const byProvider = {};
+  for (const a of accounts) byProvider[a.provider] = (byProvider[a.provider] || 0) + 1;
+  let total = 0, failed = 0, span = "";
+  for (const a of accounts) { const s = renderSpark(a); total += s.total; failed += s.failed; span = s.span || span; }
+  const keys = ((config && config["api-keys"]) || []).map((k) => { const m = /^sk-(.+)-[0-9a-f]{16,}$/.exec(k); return m ? m[1] : "unnamed"; });
+  const tiles = [
+    ["Accounts available", '<span class="num">' + usable + '</span> <span class="muted" style="font-size:15px;font-weight:400">of ' + accounts.length + "</span>", Object.keys(byProvider).map((p) => byProvider[p] + " " + providerName(p)).join(" · "), false],
+    ["Routing", esc(strategy), routing["session-affinity"] ? "A session keeps its account for " + esc(routing["session-affinity-ttl"] || "1h") + " of inactivity" : "Sessions are not kept on one account", true],
+    ["Requests " + esc(span), '<span class="num">' + total + "</span>", failed ? failed + " failed" : "none failed", false],
+    ["Client keys", '<span class="num">' + keys.length + "</span>", esc(keys.join(", ")), false],
+  ];
+  $("tiles").innerHTML = tiles.map(([label, value, sub, text]) => '<div class="tile"><div class="label">' + label + '</div><div class="value' + (text ? " text" : "") + '">' + value + '</div><div class="sub">' + sub + "</div></div>").join("");
+}
+
+// ---------- recent requests, from the hub log ----------
+const LINE = /^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\] \[([0-9a-f-]{8})\] \[\w+\s*\] \[[^\]]+\] (.*)$/;
+const HTTP = /^(\d{3}) \|\s+(\S+) \|\s+(\S+) \| (\w+)\s+"([^"]+)"/;
+const BIND = /^session-affinity: ([^|]+)\| session=\S+ auth=(\S+)(?: provider=\S+)?(?: model=(\S+))?/;
+function renderActivity(accounts) {
+  const emailOf = {};
+  for (const a of accounts) emailOf[a.id] = a.email || a.label || a.id;
+  const bindings = {};
+  const rows = [];
+  for (const line of logLines) {
+    const m = LINE.exec(line);
+    if (!m || m[2] === "--------") continue;
+    const bind = BIND.exec(m[3]);
+    if (bind) { bindings[m[2]] = { auth: bind[2], model: bind[3] || "", fresh: /new binding/.test(bind[1]) }; continue; }
+    const http = HTTP.exec(m[3]);
+    if (!http || !http[5].startsWith("/v1/") || http[5].startsWith("/v1/models")) continue;
+    rows.push({ time: m[1], id: m[2], status: +http[1], duration: http[2], client: http[3], path: http[5].split("?")[0] });
+  }
+  const latest = rows.slice(-40).reverse();
+  if (!latest.length) { $("activity").innerHTML = '<div class="empty">No model requests in the current log window.</div>'; return; }
+  $("activity").innerHTML = '<table><thead><tr><th>Time</th><th>Client</th><th>Model</th><th>Account</th><th>Result</th><th class="right">Duration</th></tr></thead><tbody>' +
+    latest.map((r) => {
+      const b = bindings[r.id] || {};
+      const ok = r.status < 400;
+      const result = '<span class="pill ' + (ok ? "good" : "critical") + '"><span class="ico">' + (ok ? "&#10003;" : "&#10005;") + "</span>" + r.status + "</span>";
+      const account = b.auth ? esc(emailOf[b.auth] || b.auth) + (b.fresh ? ' <span class="muted">(new session)</span>' : "") : '<span class="muted">&ndash;</span>';
+      return '<tr><td class="num">' + esc(r.time.slice(11)) + "</td><td>" + esc(CLIENT_NAMES[r.client] || r.client) + "</td><td>" + (b.model ? esc(b.model) : '<span class="muted">' + esc(r.path) + "</span>") + "</td><td>" + account + "</td><td>" + result + '</td><td class="right num">' + esc(r.duration) + "</td></tr>";
+    }).join("") + "</tbody></table>";
+}
+async function loadLogs() {
+  const data = await api(logLatest ? "/logs?after=" + logLatest : "/logs?limit=1500");
+  if (Array.isArray(data.lines) && data.lines.length) logLines = logLines.concat(data.lines).slice(-4000);
+  if (data["latest-timestamp"]) logLatest = data["latest-timestamp"];
+}
+
+// ---------- refresh loop ----------
+function setStatus(kind, icon, text) {
+  $("hub-status").className = "pill " + kind;
+  $("hub-status").innerHTML = '<span class="ico">' + icon + "</span>" + esc(text);
+}
+let lastData = null;
+async function refresh() {
+  try {
+    const [files, config] = await Promise.all([api("/auth-files"), api("/config")]);
+    await loadLogs().catch(() => {});
+    lastData = { accounts: files.files || [], config };
+    lastOk = Date.now();
+    $("banner").hidden = true;
+    setStatus("good", "&#10003;", "Online");
+    render();
+  } catch (error) {
+    if (error instanceof AuthError) { showLogin(true); return; }
+    setStatus("critical", "&#10005;", "Not reachable");
+    $("banner").hidden = false;
+    $("banner").textContent = "The hub did not answer (" + error.message + "). The figures below are the last ones received.";
+  }
+}
+function render() {
+  if (!lastData) return;
+  renderTiles(lastData.accounts, lastData.config);
+  renderAccounts(lastData.accounts);
+  renderActivity(lastData.accounts);
+}
+function showLogin(rejected) {
+  clearInterval(timer);
+  $("app").hidden = true;
+  $("login").hidden = false;
+  $("login-error").hidden = !rejected;
+  $("key-input").focus();
+}
+function start() {
+  $("login").hidden = true;
+  $("app").hidden = false;
+  loadClientNames().then(render);
+  refresh();
+  clearInterval(timer);
+  timer = setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
+}
+setInterval(() => { $("updated").textContent = lastOk ? "Updated " + fmtAgo(lastOk) : ""; }, 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && key && Date.now() - lastOk > REFRESH_MS) refresh(); });
+$("refresh").addEventListener("click", refresh);
+$("logout").addEventListener("click", () => { try { localStorage.removeItem(KEY_STORE); } catch (e) {} key = ""; lastData = null; showLogin(false); });
+$("login-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  key = $("key-input").value.trim();
+  $("key-input").value = "";
+  try { localStorage.setItem(KEY_STORE, key); } catch (e) {}
+  start();
+});
+
+// one shared tooltip for meters, sparkline bars and pills
+const tip = $("tip");
+document.addEventListener("mousemove", (event) => {
+  const target = event.target.closest ? event.target.closest("[data-tip]") : null;
+  const text = target && target.getAttribute("data-tip");
+  if (!text) { tip.style.display = "none"; return; }
+  tip.textContent = text;
+  tip.style.display = "block";
+  const x = Math.min(event.clientX + 12, window.innerWidth - tip.offsetWidth - 8);
+  const y = event.clientY + 16 + tip.offsetHeight > window.innerHeight ? event.clientY - tip.offsetHeight - 10 : event.clientY + 16;
+  tip.style.left = Math.max(8, x) + "px";
+  tip.style.top = y + "px";
+});
+
+loadKey();
+if (key) start(); else showLogin(false);
+</script>
+</body>
+</html>
