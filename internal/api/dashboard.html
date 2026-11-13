@@ -402,7 +402,7 @@ function renderCard(account, next, shares) {
         : "Score " + fmtFactor(mine.score) + " = weight " + fmtFactor(mine.weight) + " × weekly urgency " + fmtFactor(mine.urgency) + " × 5-hour headroom " + fmtFactor(mine.headroom) + ". Urgency is quota left divided by time left: above 1, quota would expire unused.";
       nextPill = '<span class="pill next" data-tip="' + esc(tip) + '"><span class="ico">&#9654;</span><span class="num">' + pct(mine.share * 100) + "</span>&nbsp;of new sessions" + (mine.learning ? " (reading limits)" : "") + "</span>";
     }
-    weightField = '<label class="weight" data-tip="Multiplies this account\'s share of new sessions. 2 gives it twice the share; 0 gives it no new sessions while running ones continue.">Weight <input type="number" min="0" max="100" step="1" inputmode="numeric" value="' + esc(weightOf(account)) + '" data-weight-for="' + esc(account.id) + '"></label>';
+    weightField = '<label class="weight" data-tip="Multiplies this account\'s share of new sessions. 2 gives it twice the share; 0 gives it no new sessions while running ones continue.">Weight <input type="number" min="0" max="10" step="1" inputmode="numeric" value="' + esc(weightOf(account)) + '" data-weight-for="' + esc(account.id) + '"></label>';
   } else if (next && next.id === account.id) {
     nextPill = '<span class="pill next" data-tip="' + esc(next.learning ? "Gets the next new session so the hub can read its limits." : "New sessions go to this account: its longest window resets first.") + '"><span class="ico">&#9654;</span>' + (next.learning ? "Next up (reading limits)" : "Next up") + "</span>";
   }
@@ -537,7 +537,7 @@ $("accounts").addEventListener("change", async (event) => {
   const input = event.target;
   if (!input || !input.hasAttribute || !input.hasAttribute("data-weight-for")) return;
   const weight = Math.round(Number(input.value));
-  if (!Number.isFinite(weight) || weight < 0 || weight > 100) { input.blur(); render(); return; }
+  if (!Number.isFinite(weight) || weight < 0 || weight > 10) { input.blur(); render(); return; }
   input.disabled = true;
   try {
     await api("/auth-files/fields", "PATCH", { name: input.getAttribute("data-weight-for"), weight });
