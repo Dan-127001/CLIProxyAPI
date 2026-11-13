@@ -7,131 +7,180 @@
 <style>
   :root {
     color-scheme: light;
-    --page: #f4f3f0;
-    --surface: #fcfcfb;
-    --border: #e3e1dc;
-    --text-primary: #0b0b0b;
-    --text-secondary: #52514e;
-    --text-muted: #7a7873;
+    --page: #f5f4f1;
+    --surface: #ffffff;
+    --inset: #f5f4f1;
+    --border: #e6e4df;
+    --text-primary: #111110;
+    --text-secondary: #55534f;
+    --text-muted: #85837d;
+    --accent: #2a78d6;
+    --accent-soft: #e6f0fc;
     --meter-fill: #2a78d6;
-    --meter-track: #cde2fb;
-    --pace-tick: #0b0b0b;
+    --meter-track: #dbe8fa;
+    --pace-tick: #111110;
     --good: #0ca30c;
     --warning: #fab219;
     --serious: #ec835a;
     --critical: #d03b3b;
-    --pill-bg: #eeece8;
+    --pill-bg: #efede9;
+    --shadow: 0 1px 2px rgba(17, 17, 16, 0.05), 0 4px 14px rgba(17, 17, 16, 0.04);
     --focus: #2a78d6;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       color-scheme: dark;
-      --page: #111110;
-      --surface: #1a1a19;
-      --border: #30302d;
+      --page: #0f0f0e;
+      --surface: #191918;
+      --inset: #121211;
+      --border: #2c2c29;
       --text-primary: #f0efec;
       --text-secondary: #c3c2b7;
-      --text-muted: #8f8e86;
+      --text-muted: #8a8982;
+      --accent: #3987e5;
+      --accent-soft: #15293f;
       --meter-fill: #3987e5;
-      --meter-track: #12365f;
+      --meter-track: #17324f;
       --pace-tick: #f0efec;
-      --pill-bg: #2a2a28;
+      --pill-bg: #262624;
+      --shadow: none;
       --focus: #6da7ec;
     }
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--page); color: var(--text-primary);
-    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
-  main { max-width: 1180px; margin: 0 auto; padding: 20px 16px 48px; }
-  h1 { font-size: 20px; margin: 0; font-weight: 650; }
-  h2 { font-size: 15px; margin: 28px 0 10px; font-weight: 650; }
-  a { color: inherit; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 56px; }
+  h1 { font-size: 19px; line-height: 1.2; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+  h2 { font-size: 16px; margin: 0; font-weight: 650; letter-spacing: -0.005em; }
+  a { color: inherit; text-decoration: none; }
   button, input { font: inherit; color: inherit; }
-  button {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-    padding: 6px 12px; cursor: pointer;
-  }
-  button:hover { border-color: var(--text-muted); }
   :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .muted { color: var(--text-muted); }
   .secondary { color: var(--text-secondary); }
+  .small { font-size: 12.5px; }
   .num { font-variant-numeric: tabular-nums; }
 
-  header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+  /* header */
+  header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .logo { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 10px; background: var(--accent); display: grid; place-items: center; }
+  .logo svg { display: block; }
   header.top .grow { flex: 1 1 auto; }
+  .btn {
+    display: inline-flex; align-items: center; height: 34px; padding: 0 13px; border-radius: 9px; cursor: pointer;
+    background: var(--surface); border: 1px solid var(--border); white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--text-muted); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--text-secondary); }
+  .btn.ghost:hover { background: var(--pill-bg); }
+
+  /* status and labels */
   .pill {
-    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
-    background: var(--pill-bg); border-radius: 999px; padding: 2px 10px; font-size: 12.5px;
-    color: var(--text-secondary);
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; height: 24px;
+    background: var(--pill-bg); border-radius: 999px; padding: 0 10px; font-size: 12.5px; color: var(--text-secondary);
   }
   .pill .ico { font-size: 11px; line-height: 1; }
-  .pill.good .ico { color: var(--good); }
+  .pill.good .ico, .result.good .ico { color: var(--good); }
   .pill.warning .ico { color: var(--warning); }
   .pill.serious .ico { color: var(--serious); }
-  .pill.critical .ico { color: var(--critical); }
-  .pill.next { color: var(--text-primary); border: 1px solid var(--meter-fill); background: transparent; }
-  .pill.next .ico { color: var(--meter-fill); }
+  .pill.critical .ico, .result.critical .ico { color: var(--critical); }
+  .chip {
+    display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; white-space: nowrap;
+    background: var(--accent-soft); font-size: 13px; font-weight: 650; cursor: default;
+  }
+  .chip.learning { background: transparent; border: 1px dashed var(--text-muted); font-weight: 500; }
+  .tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 5px; background: var(--pill-bg); color: var(--text-secondary); font-size: 11.5px; line-height: 18px; }
+  .result { display: inline-flex; align-items: center; gap: 6px; }
+  .result .ico { font-size: 12px; }
+
+  /* tiles */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 22px; }
+  .tile, .card, .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+  .tile { padding: 16px 18px; min-width: 0; }
+  .tile .label { color: var(--text-muted); font-size: 11.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+  .tile .value { font-size: 28px; line-height: 1.2; font-weight: 650; letter-spacing: -0.02em; margin-top: 6px; overflow-wrap: anywhere; }
+  .tile .value.text { font-size: 19px; letter-spacing: -0.01em; padding: 5px 0 3px; }
+  .tile .sub { color: var(--text-muted); font-size: 12.5px; margin-top: 4px; overflow-wrap: anywhere; }
+
+  /* account groups and cards */
+  .group-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin: 34px 0 12px; }
+  .group-head h2 { display: flex; align-items: center; gap: 8px; }
+  .count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--pill-bg); color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+  .card { padding: 18px; min-width: 0; display: flex; flex-direction: column; }
+  .card-head { display: flex; align-items: center; gap: 10px; min-height: 26px; }
+  .card-head .name { font-weight: 650; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: auto; }
+  .head-right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+  .windows { flex: 1 1 auto; }
+  .window { margin-top: 16px; }
+  .window.muted { font-size: 13px; }
+  .window-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 13px; }
+  .window-top .wname { font-weight: 600; }
+  .meter { position: relative; height: 10px; border-radius: 5px; background: var(--meter-track); margin: 7px 0 6px; }
+  .meter .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--meter-fill); min-width: 0; }
+  .meter .pace { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--pace-tick); border-radius: 1px; box-shadow: 0 0 0 2px var(--surface); }
+  .window-sub { color: var(--text-muted); font-size: 12.5px; }
+  .card-foot {
+    margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px 14px;
+  }
+  .foot-text { min-width: 0; font-size: 13px; }
+  .foot-weight { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
+  .stepper { display: inline-flex; align-items: stretch; height: 30px; border: 1px solid var(--border); border-radius: 9px; background: var(--inset); overflow: hidden; }
+  .stepper button { width: 30px; padding: 0; border: 0; background: transparent; cursor: pointer; font-size: 16px; line-height: 1; color: var(--text-secondary); }
+  .stepper button:hover { background: var(--pill-bg); color: var(--text-primary); }
+  .stepper input {
+    width: 38px; padding: 0; border: 0; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+    background: var(--surface); text-align: center; font-weight: 650; font-variant-numeric: tabular-nums; -moz-appearance: textfield;
+  }
+  .stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .spark { display: flex; align-items: flex-end; gap: 2px; height: 36px; }
+  .spark .bar { width: 6px; border-radius: 3px 3px 0 0; background: var(--meter-fill); }
+  .spark .bar.zero { height: 2px; background: var(--border); border-radius: 1px; }
+  .spark .slot { display: flex; align-items: flex-end; height: 36px; padding: 0; cursor: default; }
   .switch {
-    position: relative; flex: 0 0 auto; width: 38px; height: 22px; padding: 0; border-radius: 999px;
+    position: relative; flex: 0 0 auto; width: 40px; height: 24px; padding: 0; border-radius: 999px; cursor: pointer;
     border: 1px solid var(--border); background: var(--pill-bg);
   }
   .switch .knob {
-    position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+    position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
     background: var(--text-muted); transition: left 0.12s ease;
   }
-  .switch[aria-checked="true"] { background: var(--meter-fill); border-color: var(--meter-fill); }
+  .switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
   .switch[aria-checked="true"] .knob { left: 18px; background: #fff; }
   .switch:disabled { opacity: 0.5; cursor: progress; }
-  .card.off .window, .card.off .card-foot { opacity: 0.5; }
-  .weight { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--text-secondary); font-size: 12.5px; }
-  .weight input { width: 58px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--page); }
+  .card.off .windows, .card.off .card-foot { opacity: 0.45; }
 
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 18px; }
-  .tile, .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
-  .tile { padding: 14px 16px; min-width: 0; }
-  .tile .label { color: var(--text-secondary); font-size: 12.5px; }
-  .tile .value { font-size: 24px; font-weight: 650; margin-top: 2px; overflow-wrap: anywhere; }
-  .tile .value.text { font-size: 18px; line-height: 1.3; padding: 4px 0 2px; }
-  .tile .sub { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; overflow-wrap: anywhere; }
+  .legend { color: var(--text-muted); font-size: 12.5px; margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; }
+  .legend span.item { display: inline-flex; align-items: center; gap: 8px; }
+  .legend .tick { display: inline-block; width: 2px; height: 13px; background: var(--pace-tick); border-radius: 1px; }
+  .legend .chip { height: 20px; font-size: 12px; padding: 0 8px; color: var(--text-primary); }
 
-  .group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 28px 0 10px; }
-  .group-head h2 { margin: 0; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
-  .card { padding: 16px; min-width: 0; }
-  .card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
-  .card-head .name { font-weight: 650; font-size: 15px; overflow-wrap: anywhere; margin-right: auto; }
-  .window { margin-top: 14px; }
-  .window-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
-  .window-top .wname { font-weight: 600; }
-  .meter { position: relative; height: 8px; border-radius: 4px; background: var(--meter-track); margin: 6px 0 5px; }
-  .meter .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--meter-fill); min-width: 0; }
-  .meter .pace { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--pace-tick); border-radius: 1px; box-shadow: 0 0 0 2px var(--surface); }
-  .window-sub { color: var(--text-muted); font-size: 12.5px; }
-  .card-foot { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
-  .spark { display: flex; align-items: flex-end; gap: 2px; height: 34px; }
-  .spark .bar { width: 6px; border-radius: 3px 3px 0 0; background: var(--meter-fill); }
-  .spark .bar.zero { height: 2px; background: var(--border); border-radius: 1px; }
-  .spark .slot { display: flex; align-items: flex-end; height: 34px; padding: 0; cursor: default; }
-  .legend { color: var(--text-muted); font-size: 12.5px; margin-top: 10px; display: flex; align-items: center; gap: 8px; }
-  .legend .tick { display: inline-block; width: 2px; height: 12px; background: var(--pace-tick); border-radius: 1px; }
-
-  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; min-width: 640px; }
-  th, td { text-align: left; padding: 8px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  th { font-weight: 600; color: var(--text-secondary); font-size: 12.5px; }
+  /* recent requests */
+  .section-head { display: flex; align-items: baseline; gap: 10px; margin: 34px 0 12px; }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 660px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { font-weight: 600; color: var(--text-muted); font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; padding-top: 12px; padding-bottom: 10px; }
+  tbody tr:hover td { background: var(--inset); }
   tr:last-child td { border-bottom: 0; }
   td.right, th.right { text-align: right; }
-  .empty { padding: 22px 16px; color: var(--text-muted); }
+  td.time { color: var(--text-secondary); }
+  .empty { padding: 26px 18px; color: var(--text-muted); }
 
-  .banner { margin-top: 14px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--critical); background: var(--surface); }
-  #login { max-width: 420px; margin: 12vh auto 0; }
-  #login .card { padding: 22px; }
-  #login input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--page); margin: 10px 0 12px; }
+  .banner { margin-top: 16px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--critical); background: var(--surface); }
+  #login { max-width: 420px; margin: 14vh auto 0; }
+  #login .card { padding: 26px; display: block; }
+  #login p { margin: 8px 0 18px; }
+  #login input { width: 100%; height: 38px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--inset); margin: 6px 0 14px; }
+  #login .btn { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
   #tip {
-    position: fixed; z-index: 10; pointer-events: none; display: none; max-width: 280px;
-    background: var(--text-primary); color: var(--surface); padding: 6px 9px; border-radius: 7px; font-size: 12.5px;
+    position: fixed; z-index: 10; pointer-events: none; display: none; max-width: 300px;
+    background: var(--text-primary); color: var(--page); padding: 7px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.4;
   }
   [hidden] { display: none !important; }
 </style>
@@ -143,9 +192,9 @@
       <h1>Hub dashboard</h1>
       <p class="secondary">Enter the hub's management key. It is stored in this browser only.</p>
       <form id="login-form">
-        <label for="key-input" class="secondary">Management key</label>
+        <label for="key-input" class="secondary small">Management key</label>
         <input id="key-input" type="password" autocomplete="off" required>
-        <button type="submit">Open dashboard</button>
+        <button type="submit" class="btn">Open dashboard</button>
         <span id="login-error" class="pill critical" hidden><span class="ico">&#10005;</span>Key not accepted</span>
       </form>
     </div>
@@ -153,19 +202,25 @@
 
   <section id="app" hidden>
     <header class="top">
-      <h1>CLIProxyAPI hub</h1>
+      <div class="brand">
+        <span class="logo" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="2.6" fill="#fff" stroke="none"/><path d="M10 7.4V3.2M12.3 11.3l3.6 2.1M7.7 11.3l-3.6 2.1"/><circle cx="10" cy="2.6" r="1.4" fill="#fff" stroke="none"/><circle cx="16.6" cy="13.8" r="1.4" fill="#fff" stroke="none"/><circle cx="3.4" cy="13.8" r="1.4" fill="#fff" stroke="none"/></svg></span>
+        <div><h1>CLIProxyAPI hub</h1><div id="host" class="muted small"></div></div>
+      </div>
       <span id="hub-status" class="pill"><span class="ico">&#9679;</span>Connecting</span>
       <span class="grow"></span>
-      <span id="updated" class="muted num"></span>
-      <button id="refresh" type="button">Refresh</button>
-      <a href="/management.html"><button type="button">Management panel</button></a>
-      <button id="logout" type="button">Forget key</button>
+      <span id="updated" class="muted small num"></span>
+      <button id="refresh" type="button" class="btn">Refresh</button>
+      <a href="/management.html" class="btn">Management panel</a>
+      <button id="logout" type="button" class="btn ghost">Sign out</button>
     </header>
     <div id="banner" class="banner" hidden></div>
     <div id="tiles" class="tiles"></div>
     <div id="accounts"></div>
-    <div class="legend"><span class="tick"></span>Mark on a bar: how much of that window's time has passed. A bar well short of the mark means quota will expire unused.</div>
-    <h2>Recent requests</h2>
+    <div class="legend">
+      <span class="item"><span class="chip num">85%</span>Share of new sessions this account gets</span>
+      <span class="item"><span class="tick"></span>How much of the window's time has passed; a bar well short of it means quota will expire unused</span>
+    </div>
+    <div class="section-head"><h2>Recent requests</h2><span class="muted small">latest 40</span></div>
     <div id="activity" class="table-wrap"></div>
   </section>
 </main>
@@ -354,7 +409,15 @@ function statusPill(account) {
   if (isOff(account)) return '<span class="pill serious"><span class="ico">&#9208;</span>Off</span>';
   if (cooldown) return '<span class="pill warning"><span class="ico">&#9203;</span>Paused ' + esc(fmtDuration(Date.parse(cooldown.retry_at) - Date.now())) + (cooldown.reason ? " &middot; " + esc(cooldown.reason.replace(/_/g, " ")) : "") + "</span>";
   if (account.unavailable || (account.status && account.status !== "active")) return '<span class="pill critical"><span class="ico">&#10005;</span>' + esc(account.status_message || account.status || "Unavailable") + "</span>";
-  return '<span class="pill good"><span class="ico">&#10003;</span>Active</span>';
+  return ""; // in use: the switch already says so
+}
+function shareChip(mine) {
+  const value = mine.share * 100;
+  const text = value > 0 && value < 1 ? "<1%" : Math.round(value) + "%";
+  const tip = mine.learning
+    ? "Share of new sessions. Its limits are not known yet: it gets the next new session so the hub can read them, and a neutral share until then."
+    : "Share of new sessions. Score " + fmtFactor(mine.score) + " = weight " + fmtFactor(mine.weight) + " × weekly urgency " + fmtFactor(mine.urgency) + " × 5-hour headroom " + fmtFactor(mine.headroom) + ". Urgency is quota left divided by time left: above 1, quota would expire unused.";
+  return '<span class="chip num' + (mine.learning ? " learning" : "") + '" data-tip="' + esc(tip) + '">' + esc(text) + "</span>";
 }
 function renderWindow(w) {
   const now = Date.now();
@@ -394,25 +457,25 @@ function renderCard(account, next, shares) {
   const observed = account.quota && account.quota.observed_at ? Date.parse(account.quota.observed_at) : 0;
   let nextPill = "";
   let weightField = "";
+  const id = esc(account.id);
   if (shares) {
-    const mine = shares[account.id];
-    if (mine) {
-      const tip = mine.learning
-        ? "Its limits are not known yet: it gets the next new session so the hub can read them, and a neutral share until then."
-        : "Score " + fmtFactor(mine.score) + " = weight " + fmtFactor(mine.weight) + " × weekly urgency " + fmtFactor(mine.urgency) + " × 5-hour headroom " + fmtFactor(mine.headroom) + ". Urgency is quota left divided by time left: above 1, quota would expire unused.";
-      nextPill = '<span class="pill next" data-tip="' + esc(tip) + '"><span class="ico">&#9654;</span><span class="num">' + pct(mine.share * 100) + "</span>&nbsp;of new sessions" + (mine.learning ? " (reading limits)" : "") + "</span>";
-    }
-    weightField = '<label class="weight" data-tip="Multiplies this account\'s share of new sessions. 2 gives it twice the share; 0 gives it no new sessions while running ones continue.">Weight <input type="number" min="0" max="10" step="1" inputmode="numeric" value="' + esc(weightOf(account)) + '" data-weight-for="' + esc(account.id) + '"></label>';
+    if (shares[account.id]) nextPill = shareChip(shares[account.id]);
+    weightField = '<div class="foot-weight"><span class="secondary">Weight <span class="muted">&middot; multiplies the share</span></span>' +
+      '<span class="stepper" data-tip="2 gives this account twice the share of new sessions; 0 gives it none while running sessions continue.">' +
+      '<button type="button" data-weight-step="-1" data-account="' + id + '" aria-label="Decrease weight">&minus;</button>' +
+      '<input type="number" min="0" max="10" step="1" inputmode="numeric" aria-label="Weight" value="' + esc(weightOf(account)) + '" data-weight-for="' + id + '">' +
+      '<button type="button" data-weight-step="1" data-account="' + id + '" aria-label="Increase weight">+</button></span></div>';
   } else if (next && next.id === account.id) {
-    nextPill = '<span class="pill next" data-tip="' + esc(next.learning ? "Gets the next new session so the hub can read its limits." : "New sessions go to this account: its longest window resets first.") + '"><span class="ico">&#9654;</span>' + (next.learning ? "Next up (reading limits)" : "Next up") + "</span>";
+    nextPill = '<span class="chip" data-tip="' + esc(next.learning ? "Gets the next new session so the hub can read its limits." : "New sessions go to this account: its longest window resets first.") + '">Next up</span>';
   }
   const body = windows.length ? windows.map(renderWindow).join("") : '<div class="window muted">No limits read yet. They appear after this account\'s first request.</div>';
   const off = isOff(account);
-  const toggle = '<button type="button" class="switch" role="switch" aria-checked="' + !off + '" data-account="' + esc(account.id) + '" data-off="' + off + '" aria-label="' + esc("Use " + (account.email || account.name) + " for requests") + '" data-tip="' +
+  const toggle = '<button type="button" class="switch" role="switch" aria-checked="' + !off + '" data-account="' + id + '" data-off="' + off + '" aria-label="' + esc("Use " + (account.email || account.name) + " for requests") + '" data-tip="' +
     esc(off ? "Off: the hub does not use this account. Click to turn it on." : "On: the hub uses this account. Click to turn it off; running sessions move to another account.") + '"><span class="knob"></span></button>';
-  return '<article class="card' + (off ? " off" : "") + '"><div class="card-head"><span class="name">' + esc(account.email || account.label || account.name) + "</span>" + nextPill + statusPill(account) + toggle + "</div>" + body +
-    '<div class="card-foot"><div><div class="secondary num"><strong>' + spark.total + "</strong> " + (spark.total === 1 ? "request " : "requests ") + esc(spark.span) + (spark.failed ? " &middot; " + spark.failed + " failed" : "") + "</div>" +
-    '<div class="muted" style="font-size:12.5px">' + (observed ? "Limits read " + esc(fmtAgo(observed)) : "Limits not read yet") + " &middot; " + (account.success || 0) + " ok / " + (account.failed || 0) + " failed since hub start</div>" + weightField + "</div>" + spark.html + "</div></article>";
+  return '<article class="card' + (off ? " off" : "") + '"><div class="card-head"><span class="name">' + esc(account.email || account.label || account.name) + '</span><span class="head-right">' + nextPill + statusPill(account) + toggle + "</span></div>" +
+    '<div class="windows">' + body + "</div>" +
+    '<div class="card-foot"><div class="foot-text" data-tip="' + esc((account.success || 0) + " succeeded and " + (account.failed || 0) + " failed since the hub started") + '"><div class="num"><strong>' + spark.total + "</strong> " + (spark.total === 1 ? "request" : "requests") + ' <span class="muted">' + esc(spark.span) + "</span>" + (spark.failed ? " &middot; " + spark.failed + " failed" : "") + "</div>" +
+    '<div class="muted small">' + (observed ? "Limits read " + esc(fmtAgo(observed)) : "Limits not read yet") + "</div></div>" + spark.html + weightField + "</div></article>";
 }
 function renderAccounts(accounts) {
   const groups = {};
@@ -427,8 +490,9 @@ function renderAccounts(accounts) {
     const weekly = list.map((a) => windowsOf(a).slice(-1)[0]).filter((w) => w && w.used !== null && w.resetAt > now);
     const left = weekly.length ? weekly.reduce((sum, w) => sum + (100 - w.used), 0) / weekly.length : null;
     const soonest = weekly.length ? Math.min(...weekly.map((w) => w.resetAt)) : null;
-    const summary = (left === null ? "" : pct(left) + " of the long window left on average") + (soonest ? " &middot; next reset in " + fmtDuration(soonest - now) : "");
-    return '<div class="group-head"><h2>' + esc(providerName(provider)) + ' <span class="muted" style="font-weight:400">' + list.length + (list.length === 1 ? " account" : " accounts") + '</span></h2><span class="secondary num">' + summary + '</span></div><div class="cards">' + list.map((a) => renderCard(a, next, shares)).join("") + "</div>";
+    const windowName = weekly.length && weekly.every((w) => w.minutes === 10080) ? "weekly" : "long-window";
+    const summary = (left === null ? "" : pct(Math.round(left)) + " " + windowName + " quota left on average") + (soonest ? " &middot; next reset in " + fmtDuration(soonest - now) : "");
+    return '<div class="group-head"><h2>' + esc(providerName(provider)) + '<span class="count num">' + list.length + '</span></h2><span class="muted num">' + summary + '</span></div><div class="cards">' + list.map((a) => renderCard(a, next, shares)).join("") + "</div>";
   }).join("") || '<div class="card empty" style="margin-top:18px">No accounts are signed in to the hub.</div>';
 }
 function renderTiles(accounts, config) {
@@ -442,7 +506,7 @@ function renderTiles(accounts, config) {
   const keys = ((config && config["api-keys"]) || []).map((k) => { const m = /^sk-(.+)-[0-9a-f]{16,}$/.exec(k); return m ? m[1] : "unnamed"; });
   const tiles = [
     ["Accounts available", '<span class="num">' + usable + '</span> <span class="muted" style="font-size:15px;font-weight:400">of ' + accounts.length + "</span>", Object.keys(byProvider).map((p) => byProvider[p] + " " + providerName(p)).join(" · "), false],
-    ["Routing", esc(strategy), (routing.strategy === "smart-round-robin" ? "New sessions are shared by weight, weekly urgency and 5-hour headroom. " : "") + (routing["session-affinity"] ? "A session keeps its account for " + esc(routing["session-affinity-ttl"] || "1h") + " of inactivity" : "Sessions are not kept on one account"), true],
+    ["Routing", esc(strategy), (routing.strategy === "smart-round-robin" ? "By weight, weekly urgency and 5-hour headroom. " : "") + (routing["session-affinity"] ? "Sessions keep their account for " + esc(routing["session-affinity-ttl"] || "1h") + " of inactivity." : "Sessions are not kept on one account."), true],
     ["Requests " + esc(span), '<span class="num">' + total + "</span>", failed ? failed + " failed" : "none failed", false],
     ["Client keys", '<span class="num">' + keys.length + "</span>", esc(keys.join(", ")), false],
   ];
@@ -473,9 +537,9 @@ function renderActivity(accounts) {
     latest.map((r) => {
       const b = bindings[r.id] || {};
       const ok = r.status < 400;
-      const result = '<span class="pill ' + (ok ? "good" : "critical") + '"><span class="ico">' + (ok ? "&#10003;" : "&#10005;") + "</span>" + r.status + "</span>";
-      const account = b.auth ? esc(emailOf[b.auth] || b.auth) + (b.fresh ? ' <span class="muted">(new session)</span>' : "") : '<span class="muted">&ndash;</span>';
-      return '<tr><td class="num">' + esc(r.time.slice(11)) + "</td><td>" + esc(CLIENT_NAMES[r.client] || r.client) + "</td><td>" + (b.model ? esc(b.model) : '<span class="muted">' + esc(r.path) + "</span>") + "</td><td>" + account + "</td><td>" + result + '</td><td class="right num">' + esc(r.duration) + "</td></tr>";
+      const result = '<span class="result ' + (ok ? "good" : "critical") + '"><span class="ico">' + (ok ? "&#10003;" : "&#10005;") + '</span><span class="num">' + r.status + "</span></span>";
+      const account = b.auth ? esc(emailOf[b.auth] || b.auth) + (b.fresh ? ' <span class="tag" data-tip="First request of a new session">new</span>' : "") : '<span class="muted">&ndash;</span>';
+      return '<tr><td class="num time">' + esc(r.time.slice(11)) + "</td><td>" + esc(CLIENT_NAMES[r.client] || r.client) + "</td><td>" + (b.model ? esc(b.model) : '<span class="muted">' + esc(r.path) + "</span>") + "</td><td>" + account + "</td><td>" + result + '</td><td class="right num">' + esc(r.duration) + "</td></tr>";
     }).join("") + "</tbody></table>";
 }
 async function loadLogs() {
@@ -524,6 +588,7 @@ function showLogin(rejected) {
 function start() {
   $("login").hidden = true;
   $("app").hidden = false;
+  $("host").textContent = location.hostname;
   loadClientNames().then(render);
   refresh();
   clearInterval(timer);
@@ -532,12 +597,11 @@ function start() {
 setInterval(() => { $("updated").textContent = lastOk ? "Updated " + fmtAgo(lastOk) : ""; }, 1000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && key && Date.now() - lastOk > REFRESH_MS) refresh(); });
 $("refresh").addEventListener("click", refresh);
-// Account weight field: saved when the value is committed (Enter or leaving the field).
-$("accounts").addEventListener("change", async (event) => {
-  const input = event.target;
-  if (!input || !input.hasAttribute || !input.hasAttribute("data-weight-for")) return;
-  const weight = Math.round(Number(input.value));
+// Account weight: typed into the field (saved on Enter or when leaving it) or stepped
+// with the buttons beside it.
+async function saveWeight(input, weight) {
   if (!Number.isFinite(weight) || weight < 0 || weight > 10) { input.blur(); render(); return; }
+  input.value = weight;
   input.disabled = true;
   try {
     await api("/auth-files/fields", "PATCH", { name: input.getAttribute("data-weight-for"), weight });
@@ -549,6 +613,20 @@ $("accounts").addEventListener("change", async (event) => {
     $("banner").hidden = false;
     $("banner").textContent = "The weight could not be saved (" + error.message + ").";
   }
+}
+$("accounts").addEventListener("change", (event) => {
+  const input = event.target;
+  if (!input || !input.hasAttribute || !input.hasAttribute("data-weight-for")) return;
+  saveWeight(input, Math.round(Number(input.value)));
+});
+$("accounts").addEventListener("click", (event) => {
+  const step = event.target.closest ? event.target.closest("button[data-weight-step]") : null;
+  if (!step) return;
+  const input = step.parentElement.querySelector("input[data-weight-for]");
+  if (!input || input.disabled) return;
+  const current = Math.round(Number(input.value)) || 0;
+  const next = clamp(current + Number(step.getAttribute("data-weight-step")), 0, 10);
+  if (next !== current) saveWeight(input, next);
 });
 // Account on/off switch.
 $("accounts").addEventListener("click", async (event) => {
