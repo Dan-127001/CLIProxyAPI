@@ -73,6 +73,18 @@
   .pill.critical .ico { color: var(--critical); }
   .pill.next { color: var(--text-primary); border: 1px solid var(--meter-fill); background: transparent; }
   .pill.next .ico { color: var(--meter-fill); }
+  .switch {
+    position: relative; flex: 0 0 auto; width: 38px; height: 22px; padding: 0; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--pill-bg);
+  }
+  .switch .knob {
+    position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--text-muted); transition: left 0.12s ease;
+  }
+  .switch[aria-checked="true"] { background: var(--meter-fill); border-color: var(--meter-fill); }
+  .switch[aria-checked="true"] .knob { left: 18px; background: #fff; }
+  .switch:disabled { opacity: 0.5; cursor: progress; }
+  .card.off .window, .card.off .card-foot { opacity: 0.5; }
 
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 18px; }
   .tile, .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
@@ -200,12 +212,18 @@ function loadKey() {
 }
 
 class AuthError extends Error {}
-async function api(path) {
-  const response = await fetch(API + path, { headers: { Authorization: "Bearer " + key }, cache: "no-store" });
+async function api(path, method, body) {
+  const options = { method: method || "GET", headers: { Authorization: "Bearer " + key }, cache: "no-store" };
+  if (body !== undefined) {
+    options.headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(body);
+  }
+  const response = await fetch(API + path, options);
   if (response.status === 401 || response.status === 403) throw new AuthError();
   if (!response.ok) throw new Error("HTTP " + response.status);
   return response.json();
 }
+const isOff = (account) => Boolean(account.disabled) || account.status === "disabled";
 
 // ---------- quota windows ----------
 function signalsOf(account) {
@@ -299,7 +317,7 @@ const providerName = (p) => ({ claude: "Claude", codex: "Codex", xai: "Grok", an
 // ---------- rendering ----------
 function statusPill(account) {
   const cooldown = activeCooldown(account);
-  if (account.disabled || account.status === "disabled") return '<span class="pill serious"><span class="ico">&#9208;</span>Disabled</span>';
+  if (isOff(account)) return '<span class="pill serious"><span class="ico">&#9208;</span>Off</span>';
   if (cooldown) return '<span class="pill warning"><span class="ico">&#9203;</span>Paused ' + esc(fmtDuration(Date.parse(cooldown.retry_at) - Date.now())) + (cooldown.reason ? " &middot; " + esc(cooldown.reason.replace(/_/g, " ")) : "") + "</span>";
   if (account.unavailable || (account.status && account.status !== "active")) return '<span class="pill critical"><span class="ico">&#10005;</span>' + esc(account.status_message || account.status || "Unavailable") + "</span>";
   return '<span class="pill good"><span class="ico">&#10003;</span>Active</span>';
@@ -344,7 +362,10 @@ function renderCard(account, next) {
     ? '<span class="pill next" data-tip="' + esc(next.learning ? "Gets the next new session so the hub can read its limits." : "New sessions go to this account: its longest window resets first.") + '"><span class="ico">&#9654;</span>' + (next.learning ? "Next up (reading limits)" : "Next up") + "</span>"
     : "";
   const body = windows.length ? windows.map(renderWindow).join("") : '<div class="window muted">No limits read yet. They appear after this account\'s first request.</div>';
-  return '<article class="card"><div class="card-head"><span class="name">' + esc(account.email || account.label || account.name) + "</span>" + nextPill + statusPill(account) + "</div>" + body +
+  const off = isOff(account);
+  const toggle = '<button type="button" class="switch" role="switch" aria-checked="' + !off + '" data-account="' + esc(account.id) + '" data-off="' + off + '" aria-label="' + esc("Use " + (account.email || account.name) + " for requests") + '" data-tip="' +
+    esc(off ? "Off: the hub does not use this account. Click to turn it on." : "On: the hub uses this account. Click to turn it off; running sessions move to another account.") + '"><span class="knob"></span></button>';
+  return '<article class="card' + (off ? " off" : "") + '"><div class="card-head"><span class="name">' + esc(account.email || account.label || account.name) + "</span>" + nextPill + statusPill(account) + toggle + "</div>" + body +
     '<div class="card-foot"><div><div class="secondary num"><strong>' + spark.total + "</strong> " + (spark.total === 1 ? "request " : "requests ") + esc(spark.span) + (spark.failed ? " &middot; " + spark.failed + " failed" : "") + "</div>" +
     '<div class="muted" style="font-size:12.5px">' + (observed ? "Limits read " + esc(fmtAgo(observed)) : "Limits not read yet") + " &middot; " + (account.success || 0) + " ok / " + (account.failed || 0) + " failed since hub start</div></div>" + spark.html + "</div></article>";
 }
@@ -462,6 +483,21 @@ function start() {
 setInterval(() => { $("updated").textContent = lastOk ? "Updated " + fmtAgo(lastOk) : ""; }, 1000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && key && Date.now() - lastOk > REFRESH_MS) refresh(); });
 $("refresh").addEventListener("click", refresh);
+// Account on/off switch.
+$("accounts").addEventListener("click", async (event) => {
+  const button = event.target.closest ? event.target.closest("button.switch") : null;
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  try {
+    await api("/auth-files/status", "PATCH", { name: button.getAttribute("data-account"), disabled: button.getAttribute("data-off") !== "true" });
+    await refresh();
+  } catch (error) {
+    if (error instanceof AuthError) { showLogin(true); return; }
+    button.disabled = false;
+    $("banner").hidden = false;
+    $("banner").textContent = "The account could not be switched (" + error.message + ").";
+  }
+});
 $("logout").addEventListener("click", () => { try { localStorage.removeItem(KEY_STORE); } catch (e) {} key = ""; lastData = null; showLogin(false); });
 $("login-form").addEventListener("submit", (event) => {
   event.preventDefault();
