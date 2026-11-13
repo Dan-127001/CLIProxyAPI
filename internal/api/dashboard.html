@@ -155,6 +155,31 @@
   .switch:disabled { opacity: 0.5; cursor: progress; }
   .card.off .windows, .card.off .card-foot { opacity: 0.45; }
 
+  .resets { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+  .resets-label { color: var(--text-secondary); font-size: 13px; font-weight: 600; margin-right: 2px; }
+  .reset-btn {
+    display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 12px; border-radius: 9px; cursor: pointer;
+    background: var(--surface); border: 1px solid var(--border); font-size: 13px;
+  }
+  .reset-btn:hover:not(:disabled) { border-color: var(--accent); }
+  .reset-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .reset-btn .count { min-width: 20px; height: 20px; font-size: 11.5px; }
+  .card.off .resets { opacity: 0.45; }
+  .linkish { background: none; border: 0; padding: 0; cursor: pointer; color: var(--text-secondary); text-decoration: underline; font-size: 12.5px; }
+  dialog { width: min(460px, calc(100vw - 32px)); padding: 22px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text-primary); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28); }
+  dialog::backdrop { background: rgba(10, 10, 9, 0.45); }
+  dialog p { margin: 12px 0 0; }
+  .facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 14px 0 0; }
+  .facts dt { color: var(--text-muted); }
+  .facts dd { margin: 0; overflow-wrap: anywhere; }
+  .ack { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--warning); }
+  .ack input { margin-top: 3px; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  body.busy { cursor: progress; }
+  body.busy .reset-btn { pointer-events: none; opacity: 0.5; }
+
   .legend { color: var(--text-muted); font-size: 12.5px; margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; }
   .legend span.item { display: inline-flex; align-items: center; gap: 8px; }
   .legend .tick { display: inline-block; width: 2px; height: 13px; background: var(--pace-tick); border-radius: 1px; }
@@ -173,6 +198,9 @@
   .empty { padding: 26px 18px; color: var(--text-muted); }
 
   .banner { margin-top: 16px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--critical); background: var(--surface); }
+  .banner { cursor: pointer; }
+  .banner.good { border-color: var(--good); }
+  .banner.warning { border-color: var(--warning); }
   #login { max-width: 420px; margin: 14vh auto 0; }
   #login .card { padding: 26px; display: block; }
   #login p { margin: 8px 0 18px; }
@@ -213,17 +241,28 @@
       <a href="/management.html" class="btn">Management panel</a>
       <button id="logout" type="button" class="btn ghost">Sign out</button>
     </header>
-    <div id="banner" class="banner" hidden></div>
+    <div id="banner" class="banner" title="Click to dismiss" hidden></div>
     <div id="tiles" class="tiles"></div>
     <div id="accounts"></div>
     <div class="legend">
       <span class="item"><span class="chip num">85%</span>Share of new sessions this account gets</span>
       <span class="item"><span class="tick"></span>How much of the window's time has passed; a bar well short of it means quota will expire unused</span>
+      <span class="item"><span id="resets-status"></span><button type="button" id="check-resets" class="linkish">Check resets</button></span>
     </div>
     <div class="section-head"><h2>Recent requests</h2><span class="muted small">latest 40</span></div>
     <div id="activity" class="table-wrap"></div>
   </section>
 </main>
+<dialog id="reset-dialog">
+  <form method="dialog">
+    <h2 id="rd-title"></h2>
+    <div id="rd-body"></div>
+    <div class="dialog-actions">
+      <button type="submit" value="cancel" class="btn">Cancel</button>
+      <button type="submit" value="confirm" id="rd-confirm" class="btn primary">Use reset</button>
+    </div>
+  </form>
+</dialog>
 <div id="tip" role="tooltip"></div>
 
 <script>
@@ -473,7 +512,7 @@ function renderCard(account, next, shares) {
   const toggle = '<button type="button" class="switch" role="switch" aria-checked="' + !off + '" data-account="' + id + '" data-off="' + off + '" aria-label="' + esc("Use " + (account.email || account.name) + " for requests") + '" data-tip="' +
     esc(off ? "Off: the hub does not use this account. Click to turn it on." : "On: the hub uses this account. Click to turn it off; running sessions move to another account.") + '"><span class="knob"></span></button>';
   return '<article class="card' + (off ? " off" : "") + '"><div class="card-head"><span class="name">' + esc(account.email || account.label || account.name) + '</span><span class="head-right">' + nextPill + statusPill(account) + toggle + "</span></div>" +
-    '<div class="windows">' + body + "</div>" +
+    '<div class="windows">' + body + "</div>" + renderResets(account) +
     '<div class="card-foot"><div class="foot-text" data-tip="' + esc((account.success || 0) + " succeeded and " + (account.failed || 0) + " failed since the hub started") + '"><div class="num"><strong>' + spark.total + "</strong> " + (spark.total === 1 ? "request" : "requests") + ' <span class="muted">' + esc(spark.span) + "</span>" + (spark.failed ? " &middot; " + spark.failed + " failed" : "") + "</div>" +
     '<div class="muted small">' + (observed ? "Limits read " + esc(fmtAgo(observed)) : "Limits not read yet") + "</div></div>" + spark.html + weightField + "</div></article>";
 }
@@ -560,12 +599,14 @@ async function refresh() {
     await loadLogs().catch(() => {});
     lastData = { accounts: files.files || [], config };
     lastOk = Date.now();
-    $("banner").hidden = true;
+    if ($("banner").className === "banner") $("banner").hidden = true;
+    if (Date.now() - resetsAt > RESETS_REFRESH_MS) loadResets().catch(() => {});
     setStatus("good", "&#10003;", "Online");
     render();
   } catch (error) {
     if (error instanceof AuthError) { showLogin(true); return; }
     setStatus("critical", "&#10005;", "Not reachable");
+    $("banner").className = "banner";
     $("banner").hidden = false;
     $("banner").textContent = "The hub did not answer (" + error.message + "). The figures below are the last ones received.";
   }
@@ -594,7 +635,10 @@ function start() {
   clearInterval(timer);
   timer = setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
 }
-setInterval(() => { $("updated").textContent = lastOk ? "Updated " + fmtAgo(lastOk) : ""; }, 1000);
+setInterval(() => {
+  $("updated").textContent = lastOk ? "Updated " + fmtAgo(lastOk) : "";
+  $("resets-status").textContent = resetsLoading ? "Checking resets\u2026 " : resetsAt ? "Resets checked " + fmtAgo(resetsAt) + " \u00b7 " : "";
+}, 1000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && key && Date.now() - lastOk > REFRESH_MS) refresh(); });
 $("refresh").addEventListener("click", refresh);
 // Account weight: typed into the field (saved on Enter or when leaving it) or stepped
@@ -610,8 +654,7 @@ async function saveWeight(input, weight) {
   } catch (error) {
     if (error instanceof AuthError) { showLogin(true); return; }
     input.disabled = false;
-    $("banner").hidden = false;
-    $("banner").textContent = "The weight could not be saved (" + error.message + ").";
+    notify("critical", "The weight could not be saved (" + error.message + ").");
   }
 }
 $("accounts").addEventListener("change", (event) => {
@@ -639,8 +682,7 @@ $("accounts").addEventListener("click", async (event) => {
   } catch (error) {
     if (error instanceof AuthError) { showLogin(true); return; }
     button.disabled = false;
-    $("banner").hidden = false;
-    $("banner").textContent = "The account could not be switched (" + error.message + ").";
+    notify("critical", "The account could not be switched (" + error.message + ").");
   }
 });
 $("logout").addEventListener("click", () => { try { localStorage.removeItem(KEY_STORE); } catch (e) {} key = ""; lastData = null; showLogin(false); });
@@ -651,6 +693,304 @@ $("login-form").addEventListener("submit", (event) => {
   try { localStorage.setItem(KEY_STORE, key); } catch (e) {}
   start();
 });
+
+// ---------- banked limit resets ----------
+// Read and redeemed upstream through the hub's api-call passthrough, which sends the
+// request with the account's own login. Redeeming cannot be undone, so nothing here
+// retries a redeem by itself, and every redeem goes through the confirmation dialog.
+const CLAUDE_API = "https://api.anthropic.com";
+const CODEX_CREDITS = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits";
+const RESETS_REFRESH_MS = 30 * 60000;
+const LOW_USAGE_PERCENT = 80;
+const LIMIT_NAMES = { five_hour: "5-hour limit", seven_day: "weekly limit", seven_day_overage_included: "Fable allowance", seven_day_opus: "Opus weekly limit", seven_day_sonnet: "Sonnet weekly limit" };
+let resets = {};
+let resetsAt = 0;
+let resetsLoading = false;
+const claudeOrgs = {};
+
+function claudeHeaders(withBody) {
+  const headers = { Authorization: "Bearer $TOKEN$", "anthropic-beta": "oauth-2025-04-20", "User-Agent": "claude-cli/2.1.322 (external, cli)" };
+  if (withBody) headers["Content-Type"] = "application/json";
+  return headers;
+}
+function codexHeaders(account) {
+  const headers = { Authorization: "Bearer $TOKEN$", "Content-Type": "application/json", "OpenAI-Beta": "codex-1", Originator: "Codex Desktop" };
+  const chatgptAccount = account.id_token && account.id_token.chatgpt_account_id;
+  if (chatgptAccount) headers["Chatgpt-Account-Id"] = chatgptAccount;
+  return headers;
+}
+// One upstream request with the account's login. Returns the upstream status and JSON body.
+async function upstream(account, url, headers, data) {
+  const request = { auth_index: account.auth_index, method: data === undefined ? "GET" : "POST", url, header: headers };
+  if (data !== undefined) request.data = JSON.stringify(data);
+  const envelope = await api("/api-call", "POST", request);
+  let json = null;
+  try { json = JSON.parse(envelope.body); } catch (e) {}
+  return { status: Number(envelope.status_code) || 0, json };
+}
+const okStatus = (response) => response.status >= 200 && response.status < 300 && response.json;
+
+function limitName(key) {
+  return LIMIT_NAMES[key] || String(key).replace(/_/g, " ");
+}
+function shortResetLabel(label) {
+  const text = String(label || "Reset").replace(/\s*\(.*\)\s*$/, "").replace(/^one\s+/i, "").trim() || "Reset";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+// Every grant an account still has is offered as its own reset, named by upstream.
+function claudeResetItems(block, now) {
+  if (!block || !block.eligible || !Array.isArray(block.grants)) return [];
+  const coolingDown = Boolean(block.cooldown_until) && Date.parse(block.cooldown_until) > now;
+  return block.grants
+    .filter((grant) => grant && typeof grant.id === "string" && grant.resets_left > 0 && !grant.paused && (!grant.ends_at || Date.parse(grant.ends_at) > now))
+    .map((grant) => {
+      const used = grant.percent_used || {};
+      return {
+        provider: "claude",
+        id: grant.id,
+        title: grant.gives_back_weekly ? "Fable reset" : shortResetLabel(grant.label),
+        label: grant.label || grant.id,
+        count: grant.resets_left,
+        generation: (Number(grant.resets_total) || 0) - grant.resets_left,
+        clears: (Array.isArray(grant.clears) ? grant.clears : []).map((key) => ({ name: limitName(key), used: typeof used[key] === "number" ? used[key] : null })),
+        note: grant.gives_back_weekly ? "Refills the Fable allowance and gives back what Fable used of the weekly limit. It does not reset the whole week." : "",
+        endsAt: grant.ends_at ? Date.parse(grant.ends_at) : null,
+        usable: grant.usable_now !== false && !coolingDown,
+        unusableReason: coolingDown ? "Resets are cooling down for this account." : "Claude reports this reset as not usable right now.",
+      };
+    });
+}
+function codexResetItems(body, account, now) {
+  const credits = (body && Array.isArray(body.credits) ? body.credits : [])
+    .filter((credit) => credit && credit.reset_type === "codex_rate_limits" && credit.status === "available" && Date.parse(credit.expires_at) > now)
+    .sort((a, b) => Date.parse(a.expires_at) - Date.parse(b.expires_at));
+  if (!credits.length) return [];
+  const windows = windowsOf(account).filter((w) => w.resetAt && w.resetAt > now);
+  return [{
+    provider: "codex",
+    id: credits[0].id,
+    title: credits[0].title || "Reset",
+    label: credits[0].description || credits[0].title || "Codex rate limit reset",
+    count: credits.length,
+    generation: 0,
+    clears: windows.length ? windows.map((w) => ({ name: windowLabel(w.minutes).toLowerCase() + " limit", used: w.used })) : [{ name: "Codex limits", used: null }],
+    note: "",
+    endsAt: Date.parse(credits[0].expires_at),
+    usable: true,
+    unusableReason: "",
+  }];
+}
+async function readResetItems(account) {
+  const now = Date.now();
+  if (account.provider === "claude") {
+    const response = await upstream(account, CLAUDE_API + "/api/oauth/usage?cedar_ember=1&skip_spend=1", claudeHeaders(false));
+    if (!okStatus(response)) throw new Error("HTTP " + response.status);
+    return claudeResetItems(response.json.cedar_ember, now);
+  }
+  const response = await upstream(account, CODEX_CREDITS, codexHeaders(account));
+  if (!okStatus(response)) throw new Error("HTTP " + response.status);
+  return codexResetItems(response.json, account, now);
+}
+async function loadResets() {
+  if (!lastData || resetsLoading) return;
+  resetsLoading = true;
+  try {
+    const next = {};
+    await Promise.all(lastData.accounts.filter((a) => !isOff(a) && (a.provider === "claude" || a.provider === "codex")).map(async (account) => {
+      try { next[account.id] = { items: await readResetItems(account) }; }
+      catch (error) {
+        if (error instanceof AuthError) throw error;
+        next[account.id] = { items: [], error: error.message };
+      }
+    }));
+    resets = next;
+    resetsAt = Date.now();
+  } finally {
+    resetsLoading = false;
+  }
+  render();
+}
+function renderResets(account) {
+  const entry = resets[account.id];
+  if (!entry) return "";
+  if (entry.error) return '<div class="resets"><span class="muted small">Resets could not be read (' + esc(entry.error) + ").</span></div>";
+  if (!entry.items.length) return "";
+  return '<div class="resets"><span class="resets-label">Resets</span>' + entry.items.map((item, index) => {
+    const tip = item.usable ? item.label + (item.endsAt ? ". Expires " + fmtWhenLong(item.endsAt) + "." : "") : item.unusableReason;
+    return '<button type="button" class="reset-btn" data-reset-account="' + esc(account.id) + '" data-reset-index="' + index + '"' + (item.usable ? "" : " disabled") + ' data-tip="' + esc(tip) + '">' + esc(item.title) + '<span class="count num">' + item.count + "</span></button>";
+  }).join("") + "</div>";
+}
+function fmtWhenLong(ms) {
+  return new Date(ms).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+}
+function notify(kind, text) {
+  const banner = $("banner");
+  banner.className = "banner " + kind;
+  banner.textContent = text;
+  banner.hidden = false;
+}
+
+// Request IDs make a repeated redeem of the same reset address the same claim upstream.
+const pendingStore = {
+  get(key) { try { return localStorage.getItem(key) || ""; } catch (e) { return ""; } },
+  set(key, value) { try { localStorage.setItem(key, value); } catch (e) {} },
+  drop(key) { try { localStorage.removeItem(key); } catch (e) {} },
+};
+function uuidFromBytes(bytes, version) {
+  bytes[6] = (bytes[6] & 0x0f) | (version << 4);
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-" + hex.slice(12, 16) + "-" + hex.slice(16, 20) + "-" + hex.slice(20);
+}
+function randomUuid() {
+  return uuidFromBytes(crypto.getRandomValues(new Uint8Array(16)), 4);
+}
+// Same ID as T3 Code derives for a Codex credit, so both tools address the same claim.
+const CODEX_REDEEM_NAMESPACE = [0x6f, 0x1c, 0x2a, 0x9e, 0x2d, 0x4b, 0x4c, 0x1e, 0x9a, 0x7f, 0x3b, 0x8d, 0x5e, 0x0c, 0x1a, 0x42];
+async function codexRedeemId(account, creditId) {
+  if (!crypto.subtle) return randomUuid();
+  const name = new TextEncoder().encode(((account.id_token && account.id_token.chatgpt_account_id) || account.id) + ":" + creditId);
+  const input = new Uint8Array(CODEX_REDEEM_NAMESPACE.length + name.length);
+  input.set(CODEX_REDEEM_NAMESPACE);
+  input.set(name, CODEX_REDEEM_NAMESPACE.length);
+  return uuidFromBytes(new Uint8Array(await crypto.subtle.digest("SHA-1", input)).slice(0, 16), 5);
+}
+async function claudeOrganization(account) {
+  if (claudeOrgs[account.id]) return claudeOrgs[account.id];
+  const response = await upstream(account, CLAUDE_API + "/api/oauth/profile", claudeHeaders(false));
+  const uuid = okStatus(response) && response.json.organization && response.json.organization.uuid;
+  if (!uuid) throw new Error("the account's organisation could not be read (HTTP " + response.status + ")");
+  claudeOrgs[account.id] = uuid;
+  return uuid;
+}
+
+// Redeems one reset. Returns { state: "done" | "refused" | "unknown", text }.
+//   done:    upstream confirmed the reset (now or on an earlier attempt)
+//   refused: upstream answered and no reset happened
+//   unknown: no usable answer; the reset may or may not have been spent
+async function redeemReset(account, item) {
+  if (item.provider === "claude") {
+    const organization = await claudeOrganization(account);
+    const key = "hubReset:" + account.id + ":" + item.id + ":" + item.generation;
+    let requestId = pendingStore.get(key);
+    if (!requestId) { requestId = randomUuid(); pendingStore.set(key, requestId); }
+    let response;
+    try {
+      response = await upstream(account, CLAUDE_API + "/api/organizations/" + encodeURIComponent(organization) + "/reset_rate_limits", claudeHeaders(true), { program: "cedar_ember", grant_id: item.id, request_id: requestId });
+    } catch (error) {
+      if (error instanceof AuthError) throw error;
+      return { state: "unknown" };
+    }
+    const settled = (state, text) => { pendingStore.drop(key); return { state, text }; };
+    if (response.status === 429) return settled("refused", "Claude is rate limiting resets. Try again later.");
+    if (response.status === 401 || response.status === 403) return settled("refused", "Claude refused the hub's login for this account. Sign the account in to the hub again.");
+    switch (okStatus(response) ? response.json.result : "") {
+      case "reset": return settled("done", "");
+      case "already_used": return settled("done", "Claude reports this reset as already used.");
+      case "not_limited": return settled("refused", "Claude reports nothing to reset for this account.");
+      case "ineligible": return settled("refused", "This reset is not available for the account.");
+      case "cooldown": return settled("refused", "Resets are cooling down for this account. Try again later.");
+      default: return { state: "unknown" };
+    }
+  }
+  let response;
+  try {
+    response = await upstream(account, CODEX_CREDITS + "/consume", codexHeaders(account), { redeem_request_id: await codexRedeemId(account, item.id), credit_id: item.id });
+  } catch (error) {
+    if (error instanceof AuthError) throw error;
+    return { state: "unknown" };
+  }
+  switch (okStatus(response) ? response.json.code : "") {
+    case "reset": return { state: "done", text: "" };
+    case "already_redeemed": return { state: "done", text: "Codex reports this reset as already redeemed." };
+    case "nothing_to_reset": return { state: "refused", text: "Codex reports nothing to reset for this account." };
+    case "no_credit": return { state: "refused", text: "This reset is no longer available." };
+    default: return { state: "unknown" };
+  }
+}
+async function useReset(account, item) {
+  const name = account.email || account.name;
+  let outcome = await redeemReset(account, item);
+  let after = null;
+  try { after = await readResetItems(account); } catch (error) { if (error instanceof AuthError) throw error; }
+  if (outcome.state === "unknown" && after) {
+    // No usable answer: the count tells whether the reset was spent after all.
+    const still = after.find((entry) => entry.id === item.id);
+    if (!still || still.count < item.count) outcome = { state: "done", text: "" };
+  }
+  if (after) resets[account.id] = { items: after };
+  if (outcome.state === "done") {
+    let routingUpdated = true;
+    try { await api("/reset-quota", "POST", { auth_index: account.auth_index }); } catch (error) {
+      if (error instanceof AuthError) throw error;
+      routingUpdated = false;
+    }
+    notify(routingUpdated ? "good" : "warning", item.title + " used for " + name + ". " + (outcome.text ? outcome.text + " " : "") +
+      (routingUpdated ? "The hub reads the account's new limits with its next request." : "The hub could not refresh its view of the account; it keeps the old usage until the next request to it."));
+  } else if (outcome.state === "refused") {
+    notify("warning", item.title + " for " + name + " was not used. " + outcome.text);
+  } else {
+    notify("critical", item.title + " for " + name + " could not be confirmed. Check the resets and the account's usage; trying again addresses the same reset and cannot spend a second one.");
+  }
+  await refresh();
+}
+
+// Confirmation dialog. The reset is read again first so the dialog shows current figures.
+let dialogTarget = null;
+async function openResetDialog(account, index) {
+  const shown = resets[account.id] && resets[account.id].items[index];
+  if (!shown) return;
+  let item = shown;
+  try {
+    const fresh = await readResetItems(account);
+    resets[account.id] = { items: fresh };
+    item = fresh.find((entry) => entry.id === shown.id && entry.usable);
+  } catch (error) {
+    if (error instanceof AuthError) { showLogin(true); return; }
+    notify("critical", "The resets of " + (account.email || account.name) + " could not be read (" + error.message + ").");
+    return;
+  }
+  render();
+  if (!item) { notify("warning", shown.title + " is no longer available for " + (account.email || account.name) + "."); return; }
+  const known = item.clears.filter((entry) => entry.used !== null);
+  const highest = known.length ? Math.max(...known.map((entry) => entry.used)) : null;
+  const low = highest === null || highest < LOW_USAGE_PERCENT;
+  $("rd-title").textContent = "Use " + item.title + "?";
+  $("rd-body").innerHTML =
+    '<dl class="facts"><dt>Account</dt><dd>' + esc(account.email || account.name) + "</dd>" +
+    "<dt>Reset</dt><dd>" + esc(item.label) + "</dd>" +
+    "<dt>Resets</dt><dd>" + item.clears.map((entry) => esc(entry.name) + (entry.used === null ? ' <span class="muted">(usage unknown)</span>' : ' <span class="muted">(' + pct(entry.used) + " used now)</span>")).join("<br>") + "</dd>" +
+    (item.endsAt ? "<dt>Expires</dt><dd>" + esc(fmtWhenLong(item.endsAt)) + " &middot; in " + esc(fmtDuration(item.endsAt - Date.now())) + "</dd>" : "") +
+    "<dt>Left</dt><dd>" + item.count + " before this one is used</dd></dl>" +
+    (item.note ? '<p class="secondary">' + esc(item.note) + "</p>" : "") +
+    "<p><strong>This uses up the reset and cannot be undone.</strong></p>" +
+    (low ? '<label class="ack"><input type="checkbox" id="rd-ack"><span>' + (highest === null ? "The current usage is unknown." : "Only " + pct(highest) + " is used, so little would be gained.") + " Use it anyway.</span></label>" : "");
+  const confirm = $("rd-confirm");
+  confirm.disabled = low;
+  if (low) $("rd-ack").addEventListener("change", (event) => { confirm.disabled = !event.target.checked; });
+  dialogTarget = { account, item };
+  $("reset-dialog").showModal();
+}
+$("accounts").addEventListener("click", (event) => {
+  const button = event.target.closest ? event.target.closest("button.reset-btn") : null;
+  if (!button || button.disabled || !lastData) return;
+  const account = lastData.accounts.find((entry) => entry.id === button.getAttribute("data-reset-account"));
+  if (account) openResetDialog(account, Number(button.getAttribute("data-reset-index")));
+});
+$("reset-dialog").addEventListener("close", async () => {
+  const target = dialogTarget;
+  dialogTarget = null;
+  if (!target || $("reset-dialog").returnValue !== "confirm") return;
+  document.body.classList.add("busy");
+  try { await useReset(target.account, target.item); }
+  catch (error) {
+    if (error instanceof AuthError) showLogin(true);
+    else notify("critical", "The reset was not sent (" + error.message + ").");
+  }
+  finally { document.body.classList.remove("busy"); }
+});
+$("banner").addEventListener("click", () => { $("banner").hidden = true; });
+$("check-resets").addEventListener("click", () => { loadResets().catch((error) => { if (error instanceof AuthError) showLogin(true); }); });
 
 // one shared tooltip for meters, sparkline bars and pills
 const tip = $("tip");

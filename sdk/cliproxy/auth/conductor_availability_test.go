@@ -125,7 +125,11 @@ func TestManager_ResetQuotaClearsRuntimeAndRegistryState(t *testing.T) {
 		StatusMessage:  "quota exhausted",
 		Unavailable:    true,
 		NextRetryAfter: next,
-		Quota:          QuotaState{Exceeded: true, Reason: "quota", NextRecoverAt: next, BackoffLevel: 2},
+		Quota: QuotaState{
+			Exceeded: true, Reason: "quota", NextRecoverAt: next, BackoffLevel: 2,
+			ObservedAt: time.Now(),
+			Signals:    map[string]string{"Anthropic-Ratelimit-Unified-7d-Utilization": "1"},
+		},
 		ModelStates: map[string]*ModelState{
 			model: {
 				Status:         StatusError,
@@ -171,6 +175,9 @@ func TestManager_ResetQuotaClearsRuntimeAndRegistryState(t *testing.T) {
 	}
 	if state.Quota.Exceeded || state.Quota.Reason != "" || !state.Quota.NextRecoverAt.IsZero() || state.Quota.BackoffLevel != 0 {
 		t.Fatalf("updated model quota = %+v, want cleared", state.Quota)
+	}
+	if len(updated.Quota.Signals) != 0 || !updated.Quota.ObservedAt.IsZero() {
+		t.Fatalf("updated auth quota observation = %+v, want the pre-reset usage snapshot dropped", updated.Quota)
 	}
 	if count := reg.GetModelCount(model); count != 1 {
 		t.Fatalf("registry model count after reset = %d, want 1", count)

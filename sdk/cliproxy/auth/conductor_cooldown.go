@@ -1082,8 +1082,12 @@ func (m *Manager) ResetQuota(ctx context.Context, authID string) (*Auth, []strin
 		models = append(models, modelKey)
 		if state != nil {
 			resetModelState(state, now)
+			state.Quota.ClearObservationSignals()
 		}
 	}
+	// A quota reset invalidates the usage observed before it. Without this, quota-aware
+	// selectors keep scoring the credential by its pre-reset usage until its old reset time.
+	auth.Quota.ClearObservationSignals()
 	if clearCooldownStateForAuth(auth, now) {
 		if len(models) == 0 {
 			models = append(models, registeredModels...)
