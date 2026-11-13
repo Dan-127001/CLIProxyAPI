@@ -332,6 +332,24 @@ function signalsOf(account) {
   for (const name of Object.keys(signals)) out[name.toLowerCase()] = String(signals[name]).trim();
   return out;
 }
+// Model-specific windows, shown below the account's own windows. They are not part of the
+// routing score. The hub reports the Fable weekly allowance as the "7d_oi" window, on the
+// account or on the model it was last seen with; the latest reading is used.
+function modelWindowsOf(account) {
+  const readings = [account.quota].concat(Object.values(account.model_quotas || {}));
+  let best = null;
+  for (const reading of readings) {
+    if (!reading || !reading.signals) continue;
+    const s = {};
+    for (const name of Object.keys(reading.signals)) s[name.toLowerCase()] = String(reading.signals[name]).trim();
+    const used = parseFloat(s["anthropic-ratelimit-unified-7d_oi-utilization"]);
+    if (Number.isNaN(used)) continue;
+    const reset = parseFloat(s["anthropic-ratelimit-unified-7d_oi-reset"]);
+    const at = reading.observed_at ? Date.parse(reading.observed_at) : 0;
+    if (!best || at > best.at) best = { label: "Fable weekly", minutes: 10080, used: used * 100, resetAt: reset > 0 ? reset * 1000 : null, at };
+  }
+  return best ? [best] : [];
+}
 function windowLabel(minutes) {
   if (minutes === 300) return "5-hour";
   if (minutes === 10080) return "Weekly";
@@ -472,8 +490,8 @@ function renderWindow(w) {
   if (stale) sub = "Reset since the last reading; the next request refreshes it.";
   else if (w.resetAt) sub = "Resets in " + fmtDuration(w.resetAt - now) + " &middot; " + esc(fmtWhen(w.resetAt)) + (used === null ? "" : " &middot; " + pct(100 - used) + " left");
   else sub = "No reset time reported.";
-  const tip = used === null ? "" : pct(used) + " used" + (elapsed === null ? "" : ", " + pct(elapsed) + " of the window's time has passed");
-  return '<div class="window"><div class="window-top"><span class="wname">' + esc(windowLabel(w.minutes)) + "</span>" + right + "</div>" +
+  const tip = used === null ? "" : pct(used) + " used" + (elapsed === null ? "" : ", " + pct(elapsed) + " of the window's time has passed") + (w.at ? ". Read " + fmtAgo(w.at) + "." : "");
+  return '<div class="window"><div class="window-top"><span class="wname">' + esc(w.label || windowLabel(w.minutes)) + "</span>" + right + "</div>" +
     '<div class="meter" data-tip="' + esc(tip) + '">' +
     (used === null ? "" : '<div class="fill" style="width:' + used + '%"></div>') +
     (elapsed === null ? "" : '<div class="pace" style="left:calc(' + elapsed + '% - 1px)"></div>') +
@@ -512,7 +530,7 @@ function renderCard(account, next, shares) {
     nextPill = '<span class="chip" data-tip="' + esc(next.learning ? "Gets the next new session so the hub can read its limits." : "New sessions go to this account: its longest window resets first.") + '">Next up</span>';
   }
   const body = windows.length
-    ? windows.map(renderWindow).join("") + (shown.loadedAt ? '<div class="window-sub loaded-note">Read from the provider ' + esc(fmtAgo(shown.loadedAt)) + ". The hub reads the limits itself with the account's next request.</div>" : "")
+    ? windows.concat(shown.scoped).map(renderWindow).join("") + (shown.loadedAt ? '<div class="window-sub loaded-note">Read from the provider ' + esc(fmtAgo(shown.loadedAt)) + ". The hub reads the limits itself with the account's next request.</div>" : "")
     : '<div class="window muted">' + (shown.loadedAt ? "The provider reports no open limit window for this account." : "No limits read yet. They appear after this account's first request.") +
       '<div><button type="button" class="btn small" data-load-limits="' + esc(account.id) + '">Load limits</button></div></div>';
   const off = isOff(account);
@@ -834,6 +852,7 @@ async function readResetItems(account) {
   if (account.provider === "claude") {
     const response = await upstream(account, CLAUDE_API + "/api/oauth/usage?cedar_ember=1&skip_spend=1", claudeHeaders(false));
     if (!okStatus(response)) throw new Error("HTTP " + response.status);
+    providerModelWindows[account.id] = claudeModelWindows(response.json, now);
     return claudeResetItems(response.json.cedar_ember, now);
   }
   const response = await upstream(account, CODEX_CREDITS, codexHeaders(account));
@@ -843,10 +862,24 @@ async function readResetItems(account) {
 // Limits read straight from the provider when asked for, shown while the hub has no reading
 // of its own. Routing is unaffected: the hub only trusts what its own requests report.
 const loadedLimits = {};
+// Model-specific limits in Claude's usage response, such as the Fable weekly allowance.
+function claudeModelWindows(usage, at) {
+  return (usage && Array.isArray(usage.limits) ? usage.limits : [])
+    .filter((limit) => limit && limit.scope && limit.scope.model && limit.scope.model.display_name && typeof limit.percent === "number")
+    .map((limit) => ({
+      label: limit.scope.model.display_name + (limit.group === "weekly" ? " weekly" : limit.group === "session" ? " 5-hour" : ""),
+      minutes: limit.group === "session" ? 300 : 10080,
+      used: limit.percent,
+      resetAt: limit.resets_at ? Date.parse(limit.resets_at) : null,
+      at,
+    }));
+}
+const providerModelWindows = {};
 async function readProviderLimits(account) {
   if (account.provider === "claude") {
     const response = await upstream(account, CLAUDE_API + "/api/oauth/usage?skip_spend=1", claudeHeaders(false));
     if (!okStatus(response)) throw new Error("HTTP " + response.status);
+    providerModelWindows[account.id] = claudeModelWindows(response.json, Date.now());
     return [["five_hour", 300], ["seven_day", 10080]]
       .map(([key, minutes]) => ({ minutes, window: response.json[key] }))
       .filter((entry) => entry.window && typeof entry.window.utilization === "number")
@@ -861,10 +894,16 @@ async function readProviderLimits(account) {
     .sort((a, b) => a.minutes - b.minutes);
 }
 function shownWindows(account) {
+  // Model-specific windows: the hub's reading or the provider's, whichever is newer. The
+  // hub only has one after a request to that model, so the provider's fills the gap.
+  const fromHub = modelWindowsOf(account);
+  const fromProvider = providerModelWindows[account.id] || [];
+  const newest = (list) => list.reduce((latest, w) => Math.max(latest, w.at || 0), 0);
+  const scoped = fromHub.length && (!fromProvider.length || newest(fromHub) >= newest(fromProvider)) ? fromHub : fromProvider;
   const own = windowsOf(account);
-  if (own.length) return { windows: own, loadedAt: 0 };
+  if (own.length) return { windows: own, scoped, loadedAt: 0 };
   const loaded = loadedLimits[account.id];
-  return loaded ? { windows: loaded.windows, loadedAt: loaded.at } : { windows: [], loadedAt: 0 };
+  return loaded ? { windows: loaded.windows, scoped, loadedAt: loaded.at } : { windows: [], scoped: [], loadedAt: 0 };
 }
 async function loadLimits(account) {
   loadedLimits[account.id] = { windows: await readProviderLimits(account), at: Date.now() };
