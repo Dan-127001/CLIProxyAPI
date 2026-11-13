@@ -975,8 +975,19 @@ func (m *Manager) availableAuthsForSelector(ctx context.Context, selector Select
 	return priorityAuths, selectorAuths, nil
 }
 
-func selectionArgForSelector(selector Selector, routeModel string) string {
+// usesPrevalidatedCandidates reports whether selector relies on the manager's availability
+// filtering the way the scheduler-backed built-in strategies do. SoonestResetSelector has
+// no scheduler fast path, but it must not recheck availability against the route model.
+func usesPrevalidatedCandidates(selector Selector) bool {
 	if isBuiltInSelector(selector) {
+		return true
+	}
+	_, soonestReset := selector.(*SoonestResetSelector)
+	return soonestReset
+}
+
+func selectionArgForSelector(selector Selector, routeModel string) string {
+	if usesPrevalidatedCandidates(selector) {
 		return ""
 	}
 	return routeModel
@@ -984,7 +995,7 @@ func selectionArgForSelector(selector Selector, routeModel string) string {
 
 func selectorContextForAvailableAuths(ctx context.Context, selector Selector, routeModel string) context.Context {
 	ctx = withWeightedSelectorStateModel(ctx, selector, routeModel)
-	if !isBuiltInSelector(selector) {
+	if !usesPrevalidatedCandidates(selector) {
 		if _, sessionAffinity := selector.(*SessionAffinitySelector); !sessionAffinity {
 			return ctx
 		}
@@ -2362,7 +2373,7 @@ func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, op
 					errPick = &Error{Code: "auth_not_found", Message: "no auth available"}
 				}
 			}
-			if isBuiltInSelector(selector) {
+			if usesPrevalidatedCandidates(selector) {
 				errPick = restoreModelCooldownErrorModel(errPick, model)
 			}
 			m.warnLogAuthUnavailable(ctx, []string{provider}, model, opts, tried, errPick)
@@ -2835,7 +2846,7 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
 					errPick = &Error{Code: "auth_not_found", Message: "no auth available"}
 				}
 			}
-			if isBuiltInSelector(selector) {
+			if usesPrevalidatedCandidates(selector) {
 				errPick = restoreModelCooldownErrorModel(errPick, model)
 			}
 			m.warnLogAuthUnavailable(ctx, providers, model, opts, tried, errPick)
