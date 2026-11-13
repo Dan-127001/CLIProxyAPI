@@ -85,6 +85,8 @@
   .switch[aria-checked="true"] .knob { left: 18px; background: #fff; }
   .switch:disabled { opacity: 0.5; cursor: progress; }
   .card.off .window, .card.off .card-foot { opacity: 0.5; }
+  .weight { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--text-secondary); font-size: 12.5px; }
+  .weight input { width: 58px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--page); }
 
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 18px; }
   .tile, .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
@@ -186,6 +188,7 @@ const API = "/v0/management";
 const REFRESH_MS = 20000;
 const KEY_STORE = "hubDashboardKey";
 const STRATEGY_NAMES = {
+  "smart-round-robin": "Smart round robin",
   "soonest-reset": "Soonest reset first",
   "round-robin": "Round robin",
   "weighted-round-robin": "Weighted round robin",
@@ -291,6 +294,37 @@ function nextUp(accounts) {
   }
   return best && best.rank[0] < 2 ? { id: best.account.id, learning: best.rank[0] === 0 } : null;
 }
+// Mirrors the hub's "smart-round-robin" score (SmartRoundRobinSelector in the hub):
+// weight x urgency x headroom, and each account's share of new sessions.
+const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+const weightOf = (account) => (typeof account.weight === "number" ? account.weight : 1);
+function smartShares(accounts) {
+  const now = Date.now();
+  const out = {};
+  let total = 0;
+  for (const account of accounts.filter(isUsable)) {
+    const weight = weightOf(account);
+    const windows = windowsOf(account).filter((w) => w.resetAt);
+    const long = windows[windows.length - 1];
+    const short = windows.length > 1 ? windows[0] : null;
+    const entry = { weight, urgency: 1, headroom: 1, learning: false };
+    if (weight > 0 && (account.provider === "claude" || account.provider === "codex")) {
+      if (!account.quota || !account.quota.observed_at || (long && long.resetAt <= now)) {
+        entry.learning = true;
+      } else if (long) {
+        const unused = long.used === null ? 1 : 1 - clamp(long.used, 0, 100) / 100;
+        entry.urgency = unused / clamp((long.resetAt - now) / (long.minutes * 60000), 0.02, 1);
+        if (short && short.used !== null && short.resetAt > now) entry.headroom = clamp((1 - clamp(short.used, 0, 100) / 100) / 0.25, 0, 1);
+      }
+    }
+    entry.score = Math.max(0, weight) * entry.urgency * entry.headroom;
+    total += entry.score;
+    out[account.id] = entry;
+  }
+  for (const id of Object.keys(out)) out[id].share = total > 0 ? out[id].score / total : 1 / Object.keys(out).length;
+  return out;
+}
+const fmtFactor = (value) => (value >= 10 ? value.toFixed(0) : value.toFixed(2).replace(/\.?0+$/, ""));
 
 // ---------- formatting ----------
 function fmtDuration(ms) {
@@ -354,20 +388,31 @@ function renderSpark(account) {
   const span = buckets.length ? buckets[0].time.split("-")[0] + "\u2013" + buckets[buckets.length - 1].time.split("-")[1] : "";
   return { html: '<div class="spark" role="img" aria-label="' + esc(total + " requests between " + span + ", " + failed + " failed") + '">' + bars + "</div>", total, failed, span };
 }
-function renderCard(account, next) {
+function renderCard(account, next, shares) {
   const windows = windowsOf(account);
   const spark = renderSpark(account);
   const observed = account.quota && account.quota.observed_at ? Date.parse(account.quota.observed_at) : 0;
-  const nextPill = next && next.id === account.id
-    ? '<span class="pill next" data-tip="' + esc(next.learning ? "Gets the next new session so the hub can read its limits." : "New sessions go to this account: its longest window resets first.") + '"><span class="ico">&#9654;</span>' + (next.learning ? "Next up (reading limits)" : "Next up") + "</span>"
-    : "";
+  let nextPill = "";
+  let weightField = "";
+  if (shares) {
+    const mine = shares[account.id];
+    if (mine) {
+      const tip = mine.learning
+        ? "Its limits are not known yet: it gets the next new session so the hub can read them, and a neutral share until then."
+        : "Score " + fmtFactor(mine.score) + " = weight " + fmtFactor(mine.weight) + " × weekly urgency " + fmtFactor(mine.urgency) + " × 5-hour headroom " + fmtFactor(mine.headroom) + ". Urgency is quota left divided by time left: above 1, quota would expire unused.";
+      nextPill = '<span class="pill next" data-tip="' + esc(tip) + '"><span class="ico">&#9654;</span><span class="num">' + pct(mine.share * 100) + "</span>&nbsp;of new sessions" + (mine.learning ? " (reading limits)" : "") + "</span>";
+    }
+    weightField = '<label class="weight" data-tip="Multiplies this account\'s share of new sessions. 2 gives it twice the share; 0 gives it no new sessions while running ones continue.">Weight <input type="number" min="0" max="100" step="1" inputmode="numeric" value="' + esc(weightOf(account)) + '" data-weight-for="' + esc(account.id) + '"></label>';
+  } else if (next && next.id === account.id) {
+    nextPill = '<span class="pill next" data-tip="' + esc(next.learning ? "Gets the next new session so the hub can read its limits." : "New sessions go to this account: its longest window resets first.") + '"><span class="ico">&#9654;</span>' + (next.learning ? "Next up (reading limits)" : "Next up") + "</span>";
+  }
   const body = windows.length ? windows.map(renderWindow).join("") : '<div class="window muted">No limits read yet. They appear after this account\'s first request.</div>';
   const off = isOff(account);
   const toggle = '<button type="button" class="switch" role="switch" aria-checked="' + !off + '" data-account="' + esc(account.id) + '" data-off="' + off + '" aria-label="' + esc("Use " + (account.email || account.name) + " for requests") + '" data-tip="' +
     esc(off ? "Off: the hub does not use this account. Click to turn it on." : "On: the hub uses this account. Click to turn it off; running sessions move to another account.") + '"><span class="knob"></span></button>';
   return '<article class="card' + (off ? " off" : "") + '"><div class="card-head"><span class="name">' + esc(account.email || account.label || account.name) + "</span>" + nextPill + statusPill(account) + toggle + "</div>" + body +
     '<div class="card-foot"><div><div class="secondary num"><strong>' + spark.total + "</strong> " + (spark.total === 1 ? "request " : "requests ") + esc(spark.span) + (spark.failed ? " &middot; " + spark.failed + " failed" : "") + "</div>" +
-    '<div class="muted" style="font-size:12.5px">' + (observed ? "Limits read " + esc(fmtAgo(observed)) : "Limits not read yet") + " &middot; " + (account.success || 0) + " ok / " + (account.failed || 0) + " failed since hub start</div></div>" + spark.html + "</div></article>";
+    '<div class="muted" style="font-size:12.5px">' + (observed ? "Limits read " + esc(fmtAgo(observed)) : "Limits not read yet") + " &middot; " + (account.success || 0) + " ok / " + (account.failed || 0) + " failed since hub start</div>" + weightField + "</div>" + spark.html + "</div></article>";
 }
 function renderAccounts(accounts) {
   const groups = {};
@@ -375,13 +420,15 @@ function renderAccounts(accounts) {
   const order = Object.keys(groups).sort((a, b) => (a === "claude" ? -1 : b === "claude" ? 1 : a.localeCompare(b)));
   $("accounts").innerHTML = order.map((provider) => {
     const list = groups[provider];
-    const next = nextUp(list);
+    const smart = lastData && lastData.config && lastData.config.routing && lastData.config.routing.strategy === "smart-round-robin";
+    const shares = smart ? smartShares(list) : null;
+    const next = smart ? null : nextUp(list);
     const now = Date.now();
     const weekly = list.map((a) => windowsOf(a).slice(-1)[0]).filter((w) => w && w.used !== null && w.resetAt > now);
     const left = weekly.length ? weekly.reduce((sum, w) => sum + (100 - w.used), 0) / weekly.length : null;
     const soonest = weekly.length ? Math.min(...weekly.map((w) => w.resetAt)) : null;
     const summary = (left === null ? "" : pct(left) + " of the long window left on average") + (soonest ? " &middot; next reset in " + fmtDuration(soonest - now) : "");
-    return '<div class="group-head"><h2>' + esc(providerName(provider)) + ' <span class="muted" style="font-weight:400">' + list.length + (list.length === 1 ? " account" : " accounts") + '</span></h2><span class="secondary num">' + summary + '</span></div><div class="cards">' + list.map((a) => renderCard(a, next)).join("") + "</div>";
+    return '<div class="group-head"><h2>' + esc(providerName(provider)) + ' <span class="muted" style="font-weight:400">' + list.length + (list.length === 1 ? " account" : " accounts") + '</span></h2><span class="secondary num">' + summary + '</span></div><div class="cards">' + list.map((a) => renderCard(a, next, shares)).join("") + "</div>";
   }).join("") || '<div class="card empty" style="margin-top:18px">No accounts are signed in to the hub.</div>';
 }
 function renderTiles(accounts, config) {
@@ -395,7 +442,7 @@ function renderTiles(accounts, config) {
   const keys = ((config && config["api-keys"]) || []).map((k) => { const m = /^sk-(.+)-[0-9a-f]{16,}$/.exec(k); return m ? m[1] : "unnamed"; });
   const tiles = [
     ["Accounts available", '<span class="num">' + usable + '</span> <span class="muted" style="font-size:15px;font-weight:400">of ' + accounts.length + "</span>", Object.keys(byProvider).map((p) => byProvider[p] + " " + providerName(p)).join(" · "), false],
-    ["Routing", esc(strategy), routing["session-affinity"] ? "A session keeps its account for " + esc(routing["session-affinity-ttl"] || "1h") + " of inactivity" : "Sessions are not kept on one account", true],
+    ["Routing", esc(strategy), (routing.strategy === "smart-round-robin" ? "New sessions are shared by weight, weekly urgency and 5-hour headroom. " : "") + (routing["session-affinity"] ? "A session keeps its account for " + esc(routing["session-affinity-ttl"] || "1h") + " of inactivity" : "Sessions are not kept on one account"), true],
     ["Requests " + esc(span), '<span class="num">' + total + "</span>", failed ? failed + " failed" : "none failed", false],
     ["Client keys", '<span class="num">' + keys.length + "</span>", esc(keys.join(", ")), false],
   ];
@@ -462,7 +509,9 @@ async function refresh() {
 function render() {
   if (!lastData) return;
   renderTiles(lastData.accounts, lastData.config);
-  renderAccounts(lastData.accounts);
+  // Do not redraw the cards while a weight is being typed.
+  const editing = document.activeElement && document.activeElement.hasAttribute && document.activeElement.hasAttribute("data-weight-for");
+  if (!editing) renderAccounts(lastData.accounts);
   renderActivity(lastData.accounts);
 }
 function showLogin(rejected) {
@@ -483,6 +532,24 @@ function start() {
 setInterval(() => { $("updated").textContent = lastOk ? "Updated " + fmtAgo(lastOk) : ""; }, 1000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && key && Date.now() - lastOk > REFRESH_MS) refresh(); });
 $("refresh").addEventListener("click", refresh);
+// Account weight field: saved when the value is committed (Enter or leaving the field).
+$("accounts").addEventListener("change", async (event) => {
+  const input = event.target;
+  if (!input || !input.hasAttribute || !input.hasAttribute("data-weight-for")) return;
+  const weight = Math.round(Number(input.value));
+  if (!Number.isFinite(weight) || weight < 0 || weight > 100) { input.blur(); render(); return; }
+  input.disabled = true;
+  try {
+    await api("/auth-files/fields", "PATCH", { name: input.getAttribute("data-weight-for"), weight });
+    input.blur();
+    await refresh();
+  } catch (error) {
+    if (error instanceof AuthError) { showLogin(true); return; }
+    input.disabled = false;
+    $("banner").hidden = false;
+    $("banner").textContent = "The weight could not be saved (" + error.message + ").";
+  }
+});
 // Account on/off switch.
 $("accounts").addEventListener("click", async (event) => {
   const button = event.target.closest ? event.target.closest("button.switch") : null;

@@ -81,6 +81,8 @@ func normalizedRoutingRuntimeState(cfg *config.Config) routingRuntimeState {
 		state.strategy = "fill-first"
 	case "soonest-reset", "soonest-reset-first", "soonestreset", "srf":
 		state.strategy = "soonest-reset"
+	case "smart-round-robin", "smartroundrobin", "smart", "srr":
+		state.strategy = "smart-round-robin"
 	}
 	state.sessionAffinity = cfg.Routing.SessionAffinity
 	if ttl := strings.TrimSpace(cfg.Routing.SessionAffinityTTL); ttl != "" {
@@ -122,6 +124,8 @@ func newRoutingSelectorWithExisting(state routingRuntimeState, existing coreauth
 		selector = &coreauth.FillFirstSelector{}
 	case "soonest-reset":
 		selector = &coreauth.SoonestResetSelector{}
+	case "smart-round-robin":
+		selector = &coreauth.SmartRoundRobinSelector{}
 	default:
 		selector = &coreauth.RoundRobinSelector{}
 	}

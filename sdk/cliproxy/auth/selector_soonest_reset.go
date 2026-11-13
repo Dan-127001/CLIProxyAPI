@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,8 +44,8 @@ const (
 type SoonestResetSelector struct {
 	fallback RoundRobinSelector
 
-	mu       sync.Mutex
-	probedAt map[string]time.Time
+	mu     sync.Mutex
+	probes quotaProbeTracker
 	// nowFunc overrides the clock in tests.
 	nowFunc func() time.Time
 }
@@ -61,6 +62,9 @@ const (
 type quotaWindowReset struct {
 	length  time.Duration
 	resetAt time.Time
+	// used is the consumed share of the window (0 to 1), valid when usedKnown is set.
+	used      float64
+	usedKnown bool
 }
 
 type soonestResetCandidate struct {
@@ -91,7 +95,7 @@ func (s *SoonestResetSelector) Pick(ctx context.Context, provider, model string,
 		}
 	}
 	if picked != nil && best.rank == soonestResetRankProbe {
-		s.markProbedLocked(picked.ID, now)
+		s.probes.mark(picked.ID, now)
 	}
 	s.mu.Unlock()
 
@@ -113,7 +117,7 @@ func (s *SoonestResetSelector) ForgetAuth(authID string) {
 		return
 	}
 	s.mu.Lock()
-	delete(s.probedAt, authID)
+	s.probes.forget(authID)
 	s.mu.Unlock()
 }
 
@@ -172,29 +176,45 @@ func (s *SoonestResetSelector) classifyLocked(auth *Auth, now time.Time) soonest
 // probeOrNoDeadlineLocked ranks a credential with unknown windows: it is probed unless a
 // probe was already sent within soonestResetProbeInterval. Must be called with s.mu held.
 func (s *SoonestResetSelector) probeOrNoDeadlineLocked(authID string, now time.Time) soonestResetCandidate {
-	if probedAt, ok := s.probedAt[authID]; ok && now.Sub(probedAt) < soonestResetProbeInterval {
+	if !s.probes.due(authID, now) {
 		return soonestResetCandidate{rank: soonestResetRankNoDeadline}
 	}
 	return soonestResetCandidate{rank: soonestResetRankProbe}
 }
 
-// markProbedLocked records that authID was picked to learn its windows. Must be called
-// with s.mu held.
-func (s *SoonestResetSelector) markProbedLocked(authID string, now time.Time) {
-	if s.probedAt == nil {
-		s.probedAt = make(map[string]time.Time)
+// quotaProbeTracker remembers when a credential was last picked to learn its quota
+// windows. It is not safe for concurrent use; the owning selector holds its own lock.
+type quotaProbeTracker struct {
+	probedAt map[string]time.Time
+}
+
+// due reports whether authID may be probed: no probe was sent within the probe interval.
+func (t *quotaProbeTracker) due(authID string, now time.Time) bool {
+	probedAt, ok := t.probedAt[authID]
+	return !ok || now.Sub(probedAt) >= soonestResetProbeInterval
+}
+
+// mark records that authID was picked to learn its windows.
+func (t *quotaProbeTracker) mark(authID string, now time.Time) {
+	if t.probedAt == nil {
+		t.probedAt = make(map[string]time.Time)
 	}
-	if len(s.probedAt) >= soonestResetMaxProbeEntries {
-		for id, probedAt := range s.probedAt {
+	if len(t.probedAt) >= soonestResetMaxProbeEntries {
+		for id, probedAt := range t.probedAt {
 			if now.Sub(probedAt) >= soonestResetProbeInterval {
-				delete(s.probedAt, id)
+				delete(t.probedAt, id)
 			}
 		}
-		if len(s.probedAt) >= soonestResetMaxProbeEntries {
-			s.probedAt = make(map[string]time.Time)
+		if len(t.probedAt) >= soonestResetMaxProbeEntries {
+			t.probedAt = make(map[string]time.Time)
 		}
 	}
-	s.probedAt[authID] = now
+	t.probedAt[authID] = now
+}
+
+// forget drops the bookkeeping of a removed credential.
+func (t *quotaProbeTracker) forget(authID string) {
+	delete(t.probedAt, authID)
 }
 
 // quotaWindowResets extracts the quota windows with a usable reset time from a passive
@@ -213,10 +233,13 @@ func quotaWindowResets(provider string, signals map[string]string, observedAt ti
 			{"5h", 5 * time.Hour},
 			{"7d", 7 * 24 * time.Hour},
 		} {
-			raw := quotaSignalValue(signals, "Anthropic-Ratelimit-Unified-"+window.name+"-Reset")
-			if resetAt, ok := parseQuotaResetTimestamp(raw); ok {
-				windows = append(windows, quotaWindowReset{length: window.length, resetAt: resetAt})
+			prefix := "Anthropic-Ratelimit-Unified-" + window.name + "-"
+			resetAt, ok := parseQuotaResetTimestamp(quotaSignalValue(signals, prefix+"Reset"))
+			if !ok {
+				continue
 			}
+			used, usedKnown := parseQuotaUsedShare(quotaSignalValue(signals, prefix+"Utilization"), 1)
+			windows = append(windows, quotaWindowReset{length: window.length, resetAt: resetAt, used: used, usedKnown: usedKnown})
 		}
 	case "codex":
 		for _, name := range []string{"Primary", "Secondary"} {
@@ -233,9 +256,12 @@ func quotaWindowResets(provider string, signals map[string]string, observedAt ti
 				}
 				resetAt = observedAt.Add(time.Duration(seconds * float64(time.Second)))
 			}
+			used, usedKnown := parseQuotaUsedShare(quotaSignalValue(signals, prefix+"Used-Percent"), 100)
 			windows = append(windows, quotaWindowReset{
-				length:  time.Duration(minutes * float64(time.Minute)),
-				resetAt: resetAt,
+				length:    time.Duration(minutes * float64(time.Minute)),
+				resetAt:   resetAt,
+				used:      used,
+				usedKnown: usedKnown,
 			})
 		}
 	}
@@ -253,6 +279,24 @@ func quotaSignalValue(signals map[string]string, name string) string {
 		}
 	}
 	return ""
+}
+
+// parseQuotaUsedShare parses a usage value reported on a scale of 0 to full (1 for a
+// fraction, 100 for a percentage) into a share between 0 and 1.
+func parseQuotaUsedShare(raw string, full float64) (float64, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, false
+	}
+	value, errParse := strconv.ParseFloat(raw, 64)
+	if errParse != nil || math.IsNaN(value) || value < 0 {
+		return 0, false
+	}
+	share := value / full
+	if share > 1 {
+		share = 1
+	}
+	return share, true
 }
 
 // parseQuotaResetTimestamp parses a reset time given as Unix seconds or RFC 3339.

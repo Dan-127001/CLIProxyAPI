@@ -175,7 +175,16 @@ access:
 
 # Routing strategy for selecting credentials when multiple match.
 routing:
-  strategy: "round-robin" # round-robin (default), weighted-round-robin, fill-first, soonest-reset
+  strategy: "round-robin" # round-robin (default), weighted-round-robin, fill-first, soonest-reset, smart-round-robin
+  # smart-round-robin shares new sessions in proportion to a score per credential:
+  #   score = weight x urgency x headroom
+  # urgency is the unused share of the longest quota window (weekly on Claude and Codex
+  # subscriptions) divided by the share of its time that is left, so a credential whose quota
+  # would expire unused gets more sessions and one that would run out early gets fewer.
+  # headroom steers new sessions away from a credential with less than a quarter of its short
+  # (5-hour) window left. weight is the credential's "weight" (default 1). Credentials with
+  # unknown windows get one request to learn them; providers without quota headers are shared
+  # by weight alone. Combine it with session-affinity so running sessions stay in place.
   # soonest-reset spends the credential whose weekly quota window resets soonest, because
   # quota left over at a reset is lost. Reset times are read from the quota headers of
   # upstream responses (Claude and Codex subscriptions); a credential with unknown windows

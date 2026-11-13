@@ -976,14 +976,18 @@ func (m *Manager) availableAuthsForSelector(ctx context.Context, selector Select
 }
 
 // usesPrevalidatedCandidates reports whether selector relies on the manager's availability
-// filtering the way the scheduler-backed built-in strategies do. SoonestResetSelector has
-// no scheduler fast path, but it must not recheck availability against the route model.
+// filtering the way the scheduler-backed built-in strategies do. The quota-aware selectors
+// have no scheduler fast path, but they must not recheck availability against the route model.
 func usesPrevalidatedCandidates(selector Selector) bool {
 	if isBuiltInSelector(selector) {
 		return true
 	}
-	_, soonestReset := selector.(*SoonestResetSelector)
-	return soonestReset
+	switch selector.(type) {
+	case *SoonestResetSelector, *SmartRoundRobinSelector:
+		return true
+	default:
+		return false
+	}
 }
 
 func selectionArgForSelector(selector Selector, routeModel string) string {
