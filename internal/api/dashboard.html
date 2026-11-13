@@ -100,11 +100,12 @@
   .result .ico { font-size: 12px; }
 
   /* tiles */
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 22px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 22px; }
   .tile, .card, .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
   .tile { padding: 16px 18px; min-width: 0; }
   .tile .label { color: var(--text-muted); font-size: 11.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
   .tile .value { font-size: 28px; line-height: 1.2; font-weight: 650; letter-spacing: -0.02em; margin-top: 6px; overflow-wrap: anywhere; }
+  .tile .value .unit { font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--text-muted); }
   .tile .value.text { font-size: 19px; letter-spacing: -0.01em; padding: 5px 0 3px; }
   .tile .sub { color: var(--text-muted); font-size: 12.5px; margin-top: 4px; overflow-wrap: anywhere; }
 
@@ -555,7 +556,48 @@ function renderTiles(accounts, config) {
     ["Requests " + esc(span), '<span class="num">' + total + "</span>", failed ? failed + " failed" : "none failed", false],
     ["Client keys", '<span class="num">' + keys.length + "</span>", esc(keys.join(", ")), false],
   ];
-  $("tiles").innerHTML = tiles.map(([label, value, sub, text]) => '<div class="tile"><div class="label">' + label + '</div><div class="value' + (text ? " text" : "") + '">' + value + '</div><div class="sub">' + sub + "</div></div>").join("");
+  const speed = speedSummary();
+  const recording = !config || config["usage-statistics-enabled"] !== false;
+  tiles.splice(3, 0, ["Output speed",
+    speed ? '<span class="num">' + Math.round(speed.rate) + '</span> <span class="unit">tokens/s</span>' : "&ndash;",
+    speed ? "last 5 min &middot; " + speed.count + (speed.count === 1 ? " request" : " requests") : recording ? "no finished requests in the last 5 min" : "usage recording is switched off in the hub",
+    false,
+    speed ? "Output tokens divided by generation time, over the requests finished in the last 5 minutes. " + speed.models.map((m) => m.model + " " + Math.round(m.rate) + "/s").join(", ") + "." : ""]);
+  $("tiles").innerHTML = tiles.map(([label, value, sub, text, tip]) => '<div class="tile"' + (tip ? ' data-tip="' + esc(tip) + '"' : "") + '><div class="label">' + label + '</div><div class="value' + (text ? " text" : "") + '">' + value + '</div><div class="sub">' + sub + "</div></div>").join("");
+}
+
+// ---------- output speed, from the hub's usage records ----------
+// The hub hands each usage record out once, so the page keeps the recent ones itself.
+const SPEED_WINDOW_MS = 5 * 60000;
+let usageRecords = [];
+async function loadUsage() {
+  const records = await api("/usage-queue?count=1000");
+  for (const raw of Array.isArray(records) ? records : []) {
+    let record = raw;
+    if (typeof raw === "string") { try { record = JSON.parse(raw); } catch (e) { continue; } }
+    if (!record || record.failed) continue;
+    const output = record.token_breakdown && record.token_breakdown.output ? Number(record.token_breakdown.output.total_tokens) : 0;
+    const seconds = (Number(record.latency_ms) - Number(record.ttft_ms)) / 1000;
+    if (!(output > 0) || !(seconds > 0)) continue;
+    usageRecords.push({ at: Date.parse(record.timestamp) + Number(record.latency_ms), model: record.model || "unknown", output, seconds });
+  }
+  const cutoff = Date.now() - 3 * SPEED_WINDOW_MS;
+  usageRecords = usageRecords.filter((record) => !(record.at < cutoff)).slice(-5000);
+}
+// Output tokens per second of generation over the requests that finished in the window.
+function speedSummary() {
+  const cutoff = Date.now() - SPEED_WINDOW_MS;
+  const recent = usageRecords.filter((record) => record.at >= cutoff);
+  if (!recent.length) return null;
+  const byModel = {};
+  let output = 0, seconds = 0;
+  for (const record of recent) {
+    output += record.output; seconds += record.seconds;
+    const entry = byModel[record.model] || (byModel[record.model] = { model: record.model, output: 0, seconds: 0 });
+    entry.output += record.output; entry.seconds += record.seconds;
+  }
+  const models = Object.values(byModel).map((entry) => ({ model: entry.model, rate: entry.output / entry.seconds })).sort((a, b) => b.rate - a.rate);
+  return { rate: output / seconds, count: recent.length, models };
 }
 
 // ---------- recent requests, from the hub log ----------
@@ -603,6 +645,7 @@ async function refresh() {
   try {
     const [files, config] = await Promise.all([api("/auth-files"), api("/config")]);
     await loadLogs().catch(() => {});
+    await loadUsage().catch(() => {});
     lastData = { accounts: files.files || [], config };
     lastOk = Date.now();
     if ($("banner").className === "banner") $("banner").hidden = true;
