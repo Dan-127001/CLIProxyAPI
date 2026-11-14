@@ -92,6 +92,11 @@ type Config struct {
 	// UsageStatisticsEnabled toggles in-memory usage aggregation; when false, usage data is discarded.
 	UsageStatisticsEnabled bool `yaml:"usage-statistics-enabled" json:"usage-statistics-enabled"`
 
+	// UsageHistoryEnabled makes the server read every Claude and Codex subscription
+	// credential's quota usage from its provider every 15 minutes and keep the readings
+	// for the dashboard's consumption chart and forecast.
+	UsageHistoryEnabled bool `yaml:"usage-history-enabled" json:"usage-history-enabled"`
+
 	// RedisUsageQueueRetentionSeconds controls how long usage queue items are retained
 	// in memory for Management API consumers.
 	// Default: 60. Max: 3600.

@@ -64,6 +64,7 @@ type Handler struct {
 	siwcOAuthFactory        func(*config.Config) siwcOAuthService
 	siwcCommitMu            sync.Mutex
 	pluginLoginSaveMu       sync.Mutex
+	usageHistory            usageHistoryState
 }
 
 type configReloadSnapshot struct {

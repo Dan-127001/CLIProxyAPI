@@ -173,6 +173,46 @@
   .tl-seg.zero { height: 2px; background: var(--border-strong); border-radius: 1px; }
   .tl-axis { display: flex; justify-content: space-between; margin-top: 4px; color: var(--text-muted); font-size: 11px; font-family: var(--font-data); }
 
+  /* consumption: chart and forecast */
+  .usage { margin-top: 12px; padding: 16px 18px 14px; }
+  .usage-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .seg { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: 9px; background: var(--inset); }
+  .seg button { height: 26px; padding: 0 11px; border: 0; border-radius: 7px; background: transparent; color: var(--text-secondary); font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+  .seg button:hover { color: var(--text-primary); }
+  .seg button[aria-pressed="true"] { background: var(--hover); color: var(--text-primary); font-weight: 600; }
+  .uc-empty { margin-top: 10px; color: var(--text-muted); font-size: 13px; }
+  .uc-wrap { margin-top: 16px; }
+  .uc { position: relative; display: flex; align-items: stretch; gap: 2px; height: 140px; border-bottom: 1px solid var(--border-strong); }
+  .uc.dense { gap: 1px; }
+  .uc-grid { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--border); pointer-events: none; }
+  .uc-grid span { position: absolute; left: 0; top: 2px; padding-right: 5px; background: var(--surface); color: var(--text-muted); font-family: var(--font-data); font-size: 10.5px; line-height: 1; }
+  .uc-slot { position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column-reverse; justify-content: flex-start; gap: 1px; cursor: default; }
+  .uc-slot:hover { background: var(--raised); }
+  .uc-slot.day { border-left: 1px solid var(--border-strong); }
+  .uc-slot.est .tl-seg { opacity: 0.45; }
+  .uc-slot.reset::after { content: ""; position: absolute; top: 1px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--text-primary); }
+  .uc-axis { position: relative; height: 15px; margin-top: 5px; color: var(--text-muted); font-family: var(--font-data); font-size: 10.5px; }
+  .uc-axis span { position: absolute; top: 0; white-space: nowrap; }
+  .uc-note { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 14px; margin-top: 8px; color: var(--text-muted); font-size: 12px; }
+  .dot.faint { background: var(--text-secondary); opacity: 0.45; }
+  .dot.round { width: 6px; height: 6px; border-radius: 50%; background: var(--text-primary); }
+  .fc { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .fc-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; color: var(--text-secondary); font-size: 13px; }
+  .fc-head h3 { margin: 0 4px 0 0; color: var(--text-primary); font-size: 13.5px; font-weight: 650; }
+  .fc-head select { height: 28px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--raised); color: var(--text-primary); font: inherit; font-size: 12.5px; }
+  .fc-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.8fr) minmax(0, 1.7fr) minmax(0, 0.9fr); gap: 4px 18px; align-items: start; padding: 10px 0; border-top: 1px solid var(--border); }
+  .fc-head + .fc-row { margin-top: 10px; }
+  .fc-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13.5px; font-weight: 600; }
+  .fc-name .secondary { font-weight: 400; }
+  .fc-main { font-size: 13.5px; }
+  .fc-main strong { font-family: var(--font-data); letter-spacing: -0.02em; }
+  .fc-sub { color: var(--text-muted); font-size: 12px; }
+  .fc-verdict { display: flex; align-items: flex-start; gap: 8px; }
+  .fc-verdict .ico { margin-top: 3px; }
+  .fc-verdict.warning .ico { color: var(--warning); }
+  .fc-verdict.off .ico { color: var(--text-muted); }
+  .fc-need { text-align: right; }
+
   /* tiles: one strip, divided by hairlines */
   .tiles {
     display: grid; grid-template-columns: 1fr 1fr 1.7fr 1fr 1fr; gap: 1px; margin-top: 12px; overflow: hidden;
@@ -306,6 +346,11 @@
     .ov-name .dom { display: none; }
     .ov-cell { grid-template-columns: minmax(0, 1fr); grid-template-areas: "v" "bar" "r"; gap: 3px; }
     .ov-cell .r { text-align: left; font-size: 10.5px; }
+    .usage { padding: 14px 14px 12px; }
+    .fc-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .fc-verdict { grid-column: 1 / -1; grid-row: 2; }
+    .fc-need { grid-column: 1 / -1; grid-row: 3; text-align: left; display: flex; gap: 8px; align-items: baseline; }
+    .fc-pace { text-align: right; }
     .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .tile { padding: 12px 14px; }
     .tile.wide { grid-column: 1 / -1; }
@@ -342,6 +387,10 @@
     <section class="panel overview" aria-labelledby="overview-title">
       <div class="panel-head"><h2 id="overview-title">Overview</h2><span id="updated" class="muted small num"></span></div>
       <div id="overview"></div>
+    </section>
+    <section class="panel usage" aria-labelledby="usage-title">
+      <div class="panel-head"><h2 id="usage-title">Consumption</h2><span class="muted small">all accounts, read from the providers</span></div>
+      <div id="usage"></div>
     </section>
     <div id="tiles" class="tiles"></div>
     <div id="accounts"></div>
@@ -888,6 +937,333 @@ function speedSummary() {
   return { rate: output / seconds, count: recent.length, models };
 }
 
+// ---------- consumption over time and forecast, from the hub's usage readings ----------
+// The hub reads every account's usage from its provider every 15 minutes (and right before
+// and after a reset is used). Consumption is the difference between two readings of the
+// same window; 1 point is 1% of one account's limit.
+const USAGE_VIEW_STORE = "hubUsageView";
+const USAGE_KEEP_SECONDS = 14 * 86400;
+const usageHistory = { supported: true, enabled: true, samples: [], latest: 0, loaded: false };
+const usageView = { range: 72, metric: "week", lookback: 6, pace: 100 };
+try { Object.assign(usageView, JSON.parse(localStorage.getItem(USAGE_VIEW_STORE) || "{}")); } catch (e) {}
+
+async function loadHistory() {
+  let data;
+  try {
+    data = await api(usageHistory.loaded ? "/usage-history?after=" + usageHistory.latest : "/usage-history?hours=336");
+  } catch (error) {
+    if (error instanceof AuthError) throw error;
+    // A hub build without the tracker answers 404.
+    if (!usageHistory.loaded) usageHistory.supported = false;
+    return;
+  }
+  usageHistory.supported = true;
+  usageHistory.enabled = data.enabled !== false;
+  for (const sample of Array.isArray(data.samples) ? data.samples : []) {
+    if (!sample || !(sample.t > usageHistory.latest)) continue;
+    usageHistory.samples.push(sample);
+    usageHistory.latest = sample.t;
+  }
+  usageHistory.loaded = true;
+  const cutoff = Date.now() / 1000 - USAGE_KEEP_SECONDS;
+  if (usageHistory.samples.length && usageHistory.samples[0].t < cutoff) usageHistory.samples = usageHistory.samples.filter((sample) => sample.t >= cutoff);
+}
+
+// Which limit a window belongs to: the account's long window ("week"), its short one, or
+// the limit of one model.
+function usageMetricKey(w) {
+  return w.s ? "model:" + w.n : w.m >= 1440 ? "week" : "short";
+}
+function usageMetricName(metric) {
+  return metric === "week" ? "Weekly limit" : metric === "short" ? "5-hour limit" : metric.slice(6) + " allowance";
+}
+// Consumption between consecutive readings of the same window, per account. Reset aware:
+// a window that rolled over counts what was used since it began, and a drop inside a
+// running window (a reset used by hand, or usage given back) counts as nothing consumed.
+function usageSegments(samples) {
+  const previous = {};
+  const out = [];
+  for (const sample of samples) {
+    const accounts = sample.a || {};
+    for (const id of Object.keys(accounts)) {
+      for (const w of accounts[id].w || []) {
+        const used = Number(w.u);
+        if (!Number.isFinite(used)) continue;
+        const metric = usageMetricKey(w);
+        const key = id + "|" + metric;
+        const before = previous[key];
+        if (before && sample.t > before.t) {
+          const tolerance = Math.max(300, w.m * 60 * 0.02);
+          const segment = { from: before.t, to: sample.t, id, provider: accounts[id].p, metric, points: 0, kind: "", est: Boolean(sample.est || before.est) };
+          if (w.r && before.reset && w.r > before.reset + tolerance) {
+            segment.points = used;
+            segment.kind = "rollover";
+            if (before.reset > before.t && before.reset < sample.t) segment.from = before.reset;
+          } else if (used >= before.used) {
+            segment.points = used - before.used;
+          } else {
+            segment.kind = "reset";
+          }
+          out.push(segment);
+        }
+        previous[key] = { t: sample.t, used, reset: w.r || 0, est: Boolean(sample.est) };
+      }
+    }
+  }
+  return out;
+}
+// Spreads the segments of one limit over equal time buckets, in proportion to the overlap.
+function usageBuckets(segments, metric, fromMs, bucketMs, count) {
+  const buckets = [];
+  for (let i = 0; i < count; i++) buckets.push({ start: fromMs + i * bucketMs, total: 0, est: 0, byProvider: {}, byAccount: {}, resets: [] });
+  const toMs = fromMs + count * bucketMs;
+  for (const segment of segments) {
+    if (segment.metric !== metric) continue;
+    const a = segment.from * 1000, b = segment.to * 1000;
+    if (b <= fromMs || a >= toMs) continue;
+    if (segment.kind === "reset") {
+      const at = Math.min(count - 1, Math.max(0, Math.floor((b - 1 - fromMs) / bucketMs)));
+      if (!buckets[at].resets.includes(segment.id)) buckets[at].resets.push(segment.id);
+    }
+    if (!(segment.points > 0)) continue;
+    const span = Math.max(1, b - a);
+    const first = Math.max(0, Math.floor((a - fromMs) / bucketMs));
+    const last = Math.min(count - 1, Math.floor((b - 1 - fromMs) / bucketMs));
+    for (let i = first; i <= last; i++) {
+      const overlap = Math.min(b, buckets[i].start + bucketMs) - Math.max(a, buckets[i].start);
+      if (overlap <= 0) continue;
+      const part = (segment.points * overlap) / span;
+      buckets[i].total += part;
+      if (segment.est) buckets[i].est += part;
+      buckets[i].byProvider[segment.provider] = (buckets[i].byProvider[segment.provider] || 0) + part;
+      buckets[i].byAccount[segment.id] = (buckets[i].byAccount[segment.id] || 0) + part;
+    }
+  }
+  return buckets;
+}
+// Points consumed on one limit between two times, optionally for one provider.
+function usageTotal(segments, metric, fromMs, toMs, provider) {
+  let total = 0;
+  for (const segment of segments) {
+    if (segment.metric !== metric || !(segment.points > 0) || (provider && segment.provider !== provider)) continue;
+    const a = segment.from * 1000, b = segment.to * 1000;
+    const overlap = Math.min(b, toMs) - Math.max(a, fromMs);
+    if (overlap > 0) total += (segment.points * overlap) / Math.max(1, b - a);
+  }
+  return total;
+}
+// The latest reading of one limit for an account: { used, reset (ms), minutes, at (ms) }.
+function usageLatest(samples, id, metric) {
+  for (let i = samples.length - 1; i >= 0; i--) {
+    const reading = samples[i].a && samples[i].a[id];
+    const w = reading && (reading.w || []).find((entry) => usageMetricKey(entry) === metric);
+    if (w && Number.isFinite(Number(w.u))) return { used: Number(w.u), reset: w.r ? w.r * 1000 : 0, minutes: w.m, at: samples[i].t * 1000 };
+  }
+  return null;
+}
+// Forecast for one provider's accounts and one limit: the pace of the last hours, carried
+// forward against what is left and what each account's reset brings back. Accounts are
+// drained soonest reset first, which is what the routing aims for.
+const FORECAST_STEP_MS = 15 * 60000;
+const FORECAST_HORIZON_MS = 14 * 86400000;
+function usageForecast(segments, samples, accounts, provider, metric, lookbackHours, paceFactor, nowMs) {
+  const pool = [];
+  for (const account of accounts) {
+    if (account.provider !== provider || isOff(account)) continue;
+    const latest = usageLatest(samples, account.id, metric);
+    if (!latest) continue;
+    const lengthMs = latest.minutes * 60000;
+    let left = 100 - clamp(latest.used, 0, 100), reset = latest.reset;
+    // A window that ended after the reading is full again; its next end is one length on.
+    if (reset && reset <= nowMs) { left = 100; while (reset <= nowMs) reset += lengthMs; }
+    pool.push({ left, reset, lengthMs });
+  }
+  const firstMs = samples.length ? samples[0].t * 1000 : nowMs;
+  const covered = Math.min(lookbackHours, (nowMs - firstMs) / 3600000);
+  const out = { accounts: pool.length, left: pool.reduce((sum, account) => sum + account.left, 0), covered, rate: null, runOut: null, refill: null, needed: null };
+  if (!pool.length || !(covered >= 0.25)) return out;
+  out.rate = (usageTotal(segments, metric, nowMs - covered * 3600000, nowMs, provider) / covered) * paceFactor;
+  const windowHours = pool[0].lengthMs / 3600000;
+  out.needed = Math.ceil((out.rate * windowHours) / 100 - 1e-9);
+  if (!(out.rate > 0)) return out;
+  const perStep = (out.rate * FORECAST_STEP_MS) / 3600000;
+  for (let t = nowMs + FORECAST_STEP_MS; t <= nowMs + FORECAST_HORIZON_MS; t += FORECAST_STEP_MS) {
+    for (const account of pool) if (account.reset && account.reset <= t) { account.left = 100; account.reset += account.lengthMs; }
+    pool.sort((a, b) => (a.reset || Infinity) - (b.reset || Infinity));
+    let need = perStep;
+    for (const account of pool) {
+      const take = Math.min(account.left, need);
+      account.left -= take;
+      need -= take;
+      if (need <= 1e-9) break;
+    }
+    if (need > 1e-9) {
+      out.runOut = t;
+      const resets = pool.map((account) => account.reset).filter((reset) => reset > t);
+      out.refill = resets.length ? Math.min(...resets) : null;
+      break;
+    }
+  }
+  return out;
+}
+
+const fmtPoints = (value) => (value >= 100 ? String(Math.round(value)) : String(Math.round(value * 10) / 10));
+function niceCeil(value) {
+  const power = Math.pow(10, Math.floor(Math.log10(Math.max(value, 1e-9))));
+  for (const step of [1, 2, 5, 10]) if (value <= step * power) return step * power;
+  return 10 * power;
+}
+function usageAccountName(id) {
+  const live = lastData && lastData.accounts.find((account) => account.id === id);
+  if (live) return shortName(live);
+  const local = String(id).replace(/^[a-z]+-[0-9a-f]+-/, "").replace(/\.json$/, "").split("@")[0];
+  return local + "@";
+}
+const pad2 = (n) => String(n).padStart(2, "0");
+const hourLabel = (ms) => pad2(new Date(ms).getHours()) + ":00";
+const dayLabel = (ms) => new Date(ms).toLocaleDateString([], { weekday: "short" }) + " " + new Date(ms).getDate();
+
+function usageSeg(name, options, current) {
+  return '<div class="seg" role="group">' + options.map(([value, label]) => '<button type="button" data-usage="' + name + '" data-value="' + esc(value) + '" aria-pressed="' + (String(current) === String(value)) + '">' + esc(label) + "</button>").join("") + "</div>";
+}
+function usageSelect(name, options, current, label) {
+  return '<select data-usage="' + name + '" id="usage-' + name + '" aria-label="' + esc(label) + '">' + options.map(([value, text]) => '<option value="' + value + '"' + (String(current) === String(value) ? " selected" : "") + ">" + esc(text) + "</option>").join("") + "</select>";
+}
+function renderUsage() {
+  const box = $("usage");
+  const samples = usageHistory.samples;
+  if (!usageHistory.supported) { box.innerHTML = '<div class="uc-empty">This hub build does not record consumption yet.</div>'; return; }
+  if (samples.length < 2) {
+    box.innerHTML = '<div class="uc-empty">' + (usageHistory.enabled
+      ? "The hub reads every account's usage once every 15 minutes. The first figures appear after the second reading."
+      : "Consumption tracking is switched off. Set usage-history-enabled to true in the hub's config to record it.") + "</div>";
+    return;
+  }
+  const now = Date.now();
+  const segments = usageSegments(samples);
+  const metrics = [];
+  for (const segment of segments) if (segment.metric !== "short" && !metrics.includes(segment.metric)) metrics.push(segment.metric);
+  metrics.sort((a, b) => (a === "week" ? -1 : b === "week" ? 1 : a.localeCompare(b)));
+  const metric = metrics.includes(usageView.metric) ? usageView.metric : metrics[0] || "week";
+  const unit = metric === "week" ? "one account's weekly limit" : "one account's " + usageMetricName(metric);
+
+  // chart
+  const narrow = window.innerWidth < 600;
+  const range = [24, 72, 168].includes(Number(usageView.range)) ? Number(usageView.range) : 72;
+  const bucketHours = range === 24 ? 1 : range === 72 ? (narrow ? 2 : 1) : narrow ? 4 : 2;
+  const bucketMs = bucketHours * 3600000;
+  const count = range / bucketHours;
+  const midnight = new Date(now); midnight.setHours(0, 0, 0, 0);
+  const end = midnight.getTime() + Math.ceil((now - midnight.getTime()) / bucketMs) * bucketMs;
+  const buckets = usageBuckets(segments, metric, end - count * bucketMs, bucketMs, count);
+  const groups = lastData ? groupAccounts(lastData.accounts).map(([provider]) => provider) : [];
+  for (const bucket of buckets) for (const provider of Object.keys(bucket.byProvider)) if (!groups.includes(provider)) groups.push(provider);
+  const top = niceCeil(Math.max(1, ...buckets.map((bucket) => bucket.total)));
+  const height = 132;
+  let anyEstimated = false, anyReset = false;
+  const slots = buckets.map((bucket) => {
+    const estimated = bucket.total > 0 && bucket.est / bucket.total > 0.5;
+    anyEstimated = anyEstimated || estimated;
+    anyReset = anyReset || bucket.resets.length > 0;
+    const parts = groups.filter((provider) => bucket.byProvider[provider] > 0);
+    const detail = parts.map((provider) => {
+      const ids = Object.keys(bucket.byAccount).filter((id) => bucket.byAccount[id] >= 0.05 && (lastData ? (lastData.accounts.find((a) => a.id === id) || {}).provider || id.split("-")[0] : id.split("-")[0]) === provider);
+      return providerName(provider) + " " + fmtPoints(bucket.byProvider[provider]) + (ids.length > 1 ? " (" + ids.map((id) => usageAccountName(id) + " " + fmtPoints(bucket.byAccount[id])).join(", ") + ")" : ids.length === 1 && parts.length === 1 ? " (" + usageAccountName(ids[0]) + ")" : "");
+    }).join(" · ");
+    const tip = dayLabel(bucket.start) + ", " + hourLabel(bucket.start) + "–" + hourLabel(bucket.start + bucketMs) + " · " + fmtPoints(bucket.total) + (bucket.total === 1 ? " point" : " points") +
+      (detail ? " · " + detail : "") + (estimated ? " · estimated" : "") + (bucket.resets.length ? " · reset used on " + bucket.resets.map(usageAccountName).join(", ") : "");
+    const bars = parts.map((provider) => '<span class="tl-seg" data-provider="' + esc(provider) + '" style="height:' + Math.max(2, Math.round((bucket.byProvider[provider] / top) * height)) + 'px"></span>').join("");
+    const date = new Date(bucket.start);
+    return '<span class="uc-slot' + (date.getHours() === 0 ? " day" : "") + (estimated ? " est" : "") + (bucket.resets.length ? " reset" : "") + '" data-tip="' + esc(tip) + '">' + (bars || '<span class="tl-seg zero"></span>') + "</span>";
+  }).join("");
+  const labelEvery = range === 24 ? 6 : range === 72 ? 12 : 24;
+  const axis = buckets.map((bucket, i) => {
+    const date = new Date(bucket.start);
+    if (date.getHours() % labelEvery !== 0 || i > count - 2) return "";
+    return '<span style="left:' + ((i / count) * 100).toFixed(2) + '%">' + esc(date.getHours() === 0 ? dayLabel(bucket.start) : hourLabel(bucket.start)) + "</span>";
+  }).join("");
+  const grid = [1, 0.5].map((share) => '<div class="uc-grid" style="bottom:' + Math.round(share * height) + 'px"><span>' + fmtPoints(top * share) + "</span></div>").join("");
+
+  // figures above the chart
+  const dayTotal = usageTotal(segments, metric, now - 86400000, now);
+  const tracked = Math.min(24, (now - samples[0].t * 1000) / 3600000);
+  const peak = buckets.reduce((best, bucket) => (bucket.total > best.total ? bucket : best), buckets[0]);
+  const live = lastData ? lastData.accounts.filter((account) => !isOff(account)) : [];
+  let left = 0, counted = 0;
+  for (const account of live) {
+    const latest = usageLatest(samples, account.id, metric);
+    if (!latest) continue;
+    left += latest.reset && latest.reset <= now ? 100 : 100 - clamp(latest.used, 0, 100);
+    counted++;
+  }
+  const stat = (label, value, sub, tip) => '<div class="ov-stat" data-tip="' + esc(tip) + '"><div class="k">' + label + '</div><div class="v">' + value + '</div><div class="s">' + sub + "</div></div>";
+  const stats =
+    stat("Last 24 h", fmtPoints(dayTotal), "points", "Consumed in the last 24 hours on all accounts: " + fmtPoints(dayTotal) + " points, which is " + fmtPoints(dayTotal / 100) + " times " + unit + (tracked < 23.5 ? ". Tracked for " + fmtPoints(tracked) + " of these hours so far." : ".")) +
+    stat("Per hour", tracked >= 0.25 ? fmtPoints(dayTotal / tracked) : "&ndash;", "average", "Average points per hour over the last " + fmtPoints(tracked) + " hours.") +
+    stat("Busiest", fmtPoints(peak.total), esc(new Date(peak.start).toLocaleDateString([], { weekday: "short" }) + " " + hourLabel(peak.start)), "The busiest " + (bucketHours === 1 ? "hour" : bucketHours + " hours") + " in the chart: " + fmtPoints(peak.total) + " points from " + dayLabel(peak.start) + ", " + hourLabel(peak.start) + ".") +
+    stat("Left now", fmtPoints(left), counted + (counted === 1 ? " account" : " accounts"), "Unused points on the accounts that are switched on, from their latest reading.");
+
+  // forecast
+  const lookback = Number(usageView.lookback) || 6;
+  const pace = (Number(usageView.pace) || 100) / 100;
+  const rows = [];
+  for (const provider of groups) {
+    const providerMetrics = metrics.filter((entry) => segments.some((segment) => segment.provider === provider && segment.metric === entry));
+    for (const entry of providerMetrics) {
+      const f = usageForecast(segments, samples, lastData ? lastData.accounts : [], provider, entry, lookback, pace, now);
+      if (!f.accounts) continue;
+      let kind = "good", icon = "&#10003;", main, sub = "";
+      if (f.rate === null) { kind = "off"; icon = "&#8943;"; main = "Not enough readings yet"; }
+      else if (!(f.rate > 0)) { main = "Nothing consumed in this time"; }
+      else if (f.runOut) {
+        const hours = (f.runOut - now) / 3600000;
+        kind = hours <= 24 ? "critical" : "warning";
+        icon = hours <= 24 ? "&#10005;" : "&#9650;";
+        main = "Runs out " + esc(fmtWhen(f.runOut)) + " &middot; in " + esc(fmtDuration(f.runOut - now));
+        sub = f.refill ? "Next refill " + esc(fmtWhen(f.refill)) + ", " + esc(fmtDuration(f.refill - f.runOut)) + " later" : "";
+      } else if (f.needed > f.accounts) { main = "Lasts longer than 14 days"; sub = "but the resets do not keep up in the long run"; }
+      else { main = "Enough at this pace"; sub = "the resets keep up"; }
+      const need = f.rate > 0 ? '<div class="fc-main"><strong class="num">' + f.needed + "</strong> " + (f.needed === 1 ? "account" : "accounts") + ' needed</div><div class="fc-sub">' + f.accounts + " switched on</div>" : "";
+      rows.push('<div class="fc-row" data-provider="' + esc(provider) + '"><div class="fc-name"><span class="dot"></span>' + esc(providerName(provider)) + ' <span class="secondary">' + esc(usageMetricName(entry).toLowerCase()) + "</span></div>" +
+        '<div class="fc-pace"><div class="fc-main"><strong class="num">' + (f.rate === null ? "&ndash;" : fmtPoints(f.rate)) + '</strong> points/h</div><div class="fc-sub"><span class="num">' + fmtPoints(f.left) + "</span> left</div></div>" +
+        '<div class="fc-verdict result ' + kind + '"><span class="ico">' + icon + '</span><div><div class="fc-main">' + main + "</div>" + (sub ? '<div class="fc-sub">' + sub + "</div>" : "") + "</div></div>" +
+        '<div class="fc-need" data-tip="Accounts needed to keep this pace up without running out, counting the resets.">' + need + "</div></div>");
+    }
+  }
+  const trackedHours = (now - samples[0].t * 1000) / 3600000;
+  const forecast = '<div class="fc"><div class="fc-head"><h3>Forecast</h3><label for="usage-lookback">at the pace of the last</label>' +
+    usageSelect("lookback", [[1, "1 hour"], [3, "3 hours"], [6, "6 hours"], [12, "12 hours"], [24, "24 hours"], [72, "3 days"], [168, "7 days"]], lookback, "Hours the pace is taken from") +
+    '<label for="usage-pace">at</label>' + usageSelect("pace", [[50, "50%"], [75, "75%"], [100, "100%"], [125, "125%"], [150, "150%"], [200, "200%"]], Math.round(pace * 100), "Share of that pace") + "<span>of it</span>" +
+    (trackedHours < lookback ? '<span class="muted">&middot; only ' + esc(fmtDuration(trackedHours * 3600000)) + " recorded so far</span>" : "") + "</div>" +
+    (rows.join("") || '<div class="fc-sub" style="margin-top:8px">No account that is switched on has a reading yet.</div>') + "</div>";
+
+  box.innerHTML = '<div class="usage-controls">' + usageSeg("metric", metrics.map((entry) => [entry, usageMetricName(entry)]), metric) + usageSeg("range", [[24, "24 h"], [72, "3 days"], [168, "7 days"]], range) + "</div>" +
+    '<div class="ov-stats">' + stats + "</div>" +
+    '<div class="uc-wrap"><div class="uc' + (count > 60 ? " dense" : "") + '" role="img" aria-label="' + esc("Points consumed per " + (bucketHours === 1 ? "hour" : bucketHours + " hours") + " over the last " + range + " hours") + '">' + grid + slots + '</div><div class="uc-axis">' + axis + "</div></div>" +
+    '<div class="uc-note"><span>Points per ' + (bucketHours === 1 ? "hour" : bucketHours + " hours") + ". 1 point is 1% of " + esc(unit) + ".</span><span class=\"keys\">" +
+    groups.filter((provider) => buckets.some((bucket) => bucket.byProvider[provider] > 0)).map((provider) => '<span class="key" data-provider="' + esc(provider) + '"><span class="dot"></span>' + esc(providerName(provider)) + "</span>").join("") +
+    (anyEstimated ? '<span class="key"><span class="dot faint"></span>Estimated from request counts</span>' : "") + (anyReset ? '<span class="key"><span class="dot round"></span>Reset used</span>' : "") + "</span></div>" + forecast;
+}
+function setUsageView(name, value) {
+  if (!(name in usageView)) return;
+  usageView[name] = name === "metric" ? String(value) : Number(value);
+  try { localStorage.setItem(USAGE_VIEW_STORE, JSON.stringify(usageView)); } catch (e) {}
+  renderUsage();
+}
+$("usage").addEventListener("click", (event) => {
+  const button = event.target.closest ? event.target.closest("button[data-usage]") : null;
+  if (button) setUsageView(button.getAttribute("data-usage"), button.getAttribute("data-value"));
+});
+$("usage").addEventListener("change", (event) => {
+  const select = event.target;
+  if (select && select.getAttribute && select.getAttribute("data-usage")) { setUsageView(select.getAttribute("data-usage"), select.value); if (select.blur) select.blur(); }
+});
+// A reading outside the schedule, taken around a reset so the reset hides no consumption.
+async function collectUsageNow(reason) {
+  try { await api("/usage-history/collect", "POST", { reason }); await loadHistory(); }
+  catch (error) { if (error instanceof AuthError) throw error; }
+}
+
 // ---------- recent requests, from the hub log ----------
 const LINE = /^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\] \[([0-9a-f-]{8})\] \[\w+\s*\] \[[^\]]+\] (.*)$/;
 const HTTP = /^(\d{3}) \|\s+(\S+) \|\s+(\S+) \| (\w+)\s+"([^"]+)"/;
@@ -954,6 +1330,7 @@ async function refresh() {
     const [files, config] = await Promise.all([api("/auth-files"), api("/config")]);
     await loadLogs().catch(() => {});
     await loadUsage().catch(() => {});
+    await loadHistory();
     lastData = { accounts: files.files || [], config };
     lastOk = Date.now();
     if ($("banner").className === "banner") $("banner").hidden = true;
@@ -972,6 +1349,9 @@ function render() {
   if (!lastData) return;
   const log = parseLog(lastData.accounts);
   renderOverview(lastData.accounts, lastData.config, log);
+  // Do not redraw the consumption panel while one of its lists is open.
+  const choosing = document.activeElement && document.activeElement.tagName === "SELECT" && document.activeElement.getAttribute("data-usage");
+  if (!choosing) renderUsage();
   renderTiles(lastData.accounts, lastData.config);
   // Do not redraw the cards while a weight is being typed.
   const editing = document.activeElement && document.activeElement.hasAttribute && document.activeElement.hasAttribute("data-weight-for");
@@ -1334,6 +1714,7 @@ async function redeemReset(account, item) {
 }
 async function useReset(account, item) {
   const name = account.email || account.name;
+  await collectUsageNow("before reset");
   let outcome = await redeemReset(account, item);
   let after = null;
   try { after = await readResetItems(account); } catch (error) { if (error instanceof AuthError) throw error; }
@@ -1351,6 +1732,7 @@ async function useReset(account, item) {
     }
     notify(routingUpdated ? "good" : "warning", item.title + " used for " + name + ". " + (outcome.text ? outcome.text + " " : "") +
       (routingUpdated ? "The hub reads the account's new limits with its next request." : "The hub could not refresh its view of the account; it keeps the old usage until the next request to it."));
+    await collectUsageNow("reset");
   } else if (outcome.state === "refused") {
     notify("warning", item.title + " for " + name + " was not used. " + outcome.text);
   } else {

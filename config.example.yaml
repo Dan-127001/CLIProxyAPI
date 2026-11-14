@@ -1326,6 +1326,11 @@ observability:
     # Default: 60. Max: 3600.
     redis-usage-queue-retention-seconds: 60
 
+    # When true, read every Claude and Codex subscription credential's quota usage from its
+    # provider every 15 minutes and keep the readings (usage-history.jsonl in the auth
+    # directory, 60 days) for the dashboard's consumption chart and forecast.
+    usage-history-enabled: false
+
   # Enable pprof HTTP debug server (host:port). Keep it bound to localhost for safety.
   pprof:
     enable: false
