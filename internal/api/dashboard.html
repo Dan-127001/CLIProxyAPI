@@ -2,60 +2,54 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0c0b0a">
 <title>Hub dashboard</title>
 <style>
+  /* Layout: the overview panel comes first (what is running now, then usage per account),
+     the detail panels follow. Dark only. The only chroma is each provider's colour
+     (Claude orange, OpenAI white) and the status colours. */
   :root {
-    color-scheme: light;
-    --page: #f5f4f1;
-    --surface: #ffffff;
-    --inset: #f5f4f1;
-    --border: #e6e4df;
-    --text-primary: #111110;
-    --text-secondary: #55534f;
-    --text-muted: #85837d;
-    --accent: #2a78d6;
-    --accent-soft: #e6f0fc;
-    --meter-fill: #2a78d6;
-    --meter-track: #dbe8fa;
-    --pace-tick: #111110;
-    --good: #0ca30c;
-    --warning: #fab219;
-    --serious: #ec835a;
-    --critical: #d03b3b;
-    --pill-bg: #efede9;
-    --shadow: 0 1px 2px rgba(17, 17, 16, 0.05), 0 4px 14px rgba(17, 17, 16, 0.04);
-    --focus: #2a78d6;
+    color-scheme: dark;
+    --page: #0c0b0a;
+    --surface: #151412;
+    --raised: #1d1b18;
+    --hover: #26231f;
+    --inset: #0f0e0d;
+    --border: #292723;
+    --border-strong: #3d3a34;
+    --text-primary: #f4f1ea;
+    --text-secondary: #bdb8ae;
+    --text-muted: #87837a;
+    --claude: #d97757;
+    --openai: #ffffff;
+    --other: #9fb2c6;
+    --prov: var(--other);
+    --good: #4cc38a;
+    --warning: #f2c14e;
+    --critical: #f0625f;
+    --focus: #f4f1ea;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-data: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+    --radius: 14px;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color-scheme: dark;
-      --page: #0f0f0e;
-      --surface: #191918;
-      --inset: #121211;
-      --border: #2c2c29;
-      --text-primary: #f0efec;
-      --text-secondary: #c3c2b7;
-      --text-muted: #8a8982;
-      --accent: #3987e5;
-      --accent-soft: #15293f;
-      --meter-fill: #3987e5;
-      --meter-track: #17324f;
-      --pace-tick: #f0efec;
-      --pill-bg: #262624;
-      --shadow: none;
-      --focus: #6da7ec;
-    }
-  }
+  [data-provider="claude"] { --prov: var(--claude); }
+  [data-provider="codex"] { --prov: var(--openai); }
+
   * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0; background: var(--page); color: var(--text-primary);
-    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font: 14px/1.5 var(--font-ui);
     -webkit-font-smoothing: antialiased;
   }
-  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 56px; }
-  h1 { font-size: 19px; line-height: 1.2; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
-  h2 { font-size: 16px; margin: 0; font-weight: 650; letter-spacing: -0.005em; }
+  main {
+    max-width: 1180px; margin: 0 auto; padding-block: 18px 48px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  h1 { font-size: 16px; line-height: 1.2; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+  h2 { font-size: 15px; line-height: 1.3; margin: 0; font-weight: 650; letter-spacing: -0.005em; }
   a { color: inherit; text-decoration: none; }
   button, input { font: inherit; color: inherit; }
   :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -63,58 +57,140 @@
   .secondary { color: var(--text-secondary); }
   .small { font-size: 12.5px; }
   .num { font-variant-numeric: tabular-nums; }
+  .mono { font-family: var(--font-data); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 3px; background: var(--prov); }
 
   /* header */
-  header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
-  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
-  .logo { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 10px; background: var(--accent); display: grid; place-items: center; }
+  header.top { display: flex; align-items: center; gap: 10px; }
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; margin-right: auto; }
+  .brand > div { min-width: 0; }
+  #host { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .logo { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px; background: var(--raised); border: 1px solid var(--border); display: grid; place-items: center; }
   .logo svg { display: block; }
-  header.top .grow { flex: 1 1 auto; }
+  .logo .spoke { stroke: var(--text-muted); }
+  .logo .core { fill: var(--text-primary); }
+  .logo .n-claude { fill: var(--claude); }
+  .logo .n-openai { fill: var(--openai); }
+  .logo .n-other { fill: var(--text-muted); }
   .btn {
-    display: inline-flex; align-items: center; height: 34px; padding: 0 13px; border-radius: 9px; cursor: pointer;
-    background: var(--surface); border: 1px solid var(--border); white-space: nowrap;
+    display: inline-flex; align-items: center; justify-content: center; height: 34px; padding: 0 13px; border-radius: 9px; cursor: pointer;
+    background: var(--raised); border: 1px solid var(--border); color: var(--text-primary); white-space: nowrap;
   }
-  .btn:hover { border-color: var(--text-muted); }
-  .btn.small { height: 28px; padding: 0 10px; font-size: 12.5px; margin-top: 10px; color: var(--text-primary); }
-  .loaded-note { margin-top: 12px; }
+  .btn:hover { background: var(--hover); border-color: var(--border-strong); }
+  .btn.icon { width: 34px; padding: 0; font-size: 17px; line-height: 1; }
+  .btn.small { height: 28px; padding: 0 10px; font-size: 12.5px; margin-top: 10px; }
   .btn.ghost { background: transparent; border-color: transparent; color: var(--text-secondary); }
-  .btn.ghost:hover { background: var(--pill-bg); }
+  .btn.ghost:hover { background: var(--raised); color: var(--text-primary); }
+  .btn.primary { background: var(--text-primary); border-color: var(--text-primary); color: var(--page); font-weight: 650; }
+  .btn.primary:hover { background: #ffffff; border-color: #ffffff; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .loaded-note { margin-top: 12px; }
+  .foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 28px; }
 
   /* status and labels */
   .pill {
     display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; height: 24px;
-    background: var(--pill-bg); border-radius: 999px; padding: 0 10px; font-size: 12.5px; color: var(--text-secondary);
+    background: var(--raised); border: 1px solid var(--border); border-radius: 999px; padding: 0 10px; font-size: 12.5px; color: var(--text-secondary);
   }
   .pill .ico { font-size: 11px; line-height: 1; }
-  .pill.good .ico, .result.good .ico { color: var(--good); }
-  .pill.warning .ico { color: var(--warning); }
-  .pill.serious .ico { color: var(--serious); }
-  .pill.critical .ico, .result.critical .ico { color: var(--critical); }
+  .pill.good .ico, .result.good .ico, .note.good .ico { color: var(--good); }
+  .pill.warning .ico, .note.warning .ico { color: var(--warning); }
+  .pill.off .ico, .note.off .ico { color: var(--text-muted); }
+  .pill.critical .ico, .result.critical .ico, .note.critical .ico { color: var(--critical); }
   .chip {
-    display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; white-space: nowrap;
-    background: var(--accent-soft); font-size: 13px; font-weight: 650; cursor: default;
+    display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 999px; white-space: nowrap;
+    background: var(--raised); background: color-mix(in srgb, var(--prov) 15%, transparent);
+    border: 1px solid var(--border-strong); border-color: color-mix(in srgb, var(--prov) 42%, transparent);
+    font-size: 12.5px; font-weight: 650; cursor: default;
   }
+  .chip.num { font-family: var(--font-data); letter-spacing: -0.02em; }
   .chip.learning { background: transparent; border: 1px dashed var(--text-muted); font-weight: 500; }
-  .tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 5px; background: var(--pill-bg); color: var(--text-secondary); font-size: 11.5px; line-height: 18px; }
+  .tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 5px; background: var(--raised); border: 1px solid var(--border); color: var(--text-secondary); font-size: 11px; line-height: 17px; }
   .result { display: inline-flex; align-items: center; gap: 6px; }
   .result .ico { font-size: 12px; }
 
-  /* tiles */
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 22px; }
-  .tile, .card, .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
-  .tile { padding: 16px 18px; min-width: 0; }
-  .tile .label { color: var(--text-muted); font-size: 11.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
-  .tile .value { font-size: 28px; line-height: 1.2; font-weight: 650; letter-spacing: -0.02em; margin-top: 6px; overflow-wrap: anywhere; }
-  .tile .value .unit { font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--text-muted); }
-  .tile .value.text { font-size: 19px; letter-spacing: -0.01em; padding: 5px 0 3px; }
-  .tile .sub { color: var(--text-muted); font-size: 12.5px; margin-top: 4px; overflow-wrap: anywhere; }
+  /* overview: the first panel */
+  .panel, .card, .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .overview { margin-top: 16px; padding: 16px 18px 14px; }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .ov-notes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .note {
+    display: inline-flex; align-items: center; gap: 7px; min-height: 26px; padding: 3px 10px; border-radius: 8px; font-size: 12.5px;
+    background: var(--raised); border: 1px solid var(--border); color: var(--text-secondary);
+  }
+  .note .ico { font-size: 11px; line-height: 1; }
+  .note strong { color: var(--text-primary); font-weight: 600; }
+  .note.warning { border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); }
+  .note.critical { border-color: color-mix(in srgb, var(--critical) 50%, var(--border)); }
+  .ov-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 12px; background: var(--inset); border: 1px solid var(--border); border-radius: 10px; }
+  .ov-stat { min-width: 0; padding: 10px 14px; border-left: 1px solid var(--border); }
+  .ov-stat:first-child { border-left: 0; }
+  .ov-stat .k { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+  .ov-stat .v { font-variant-numeric: tabular-nums; font-size: 24px; line-height: 1.2; font-weight: 650; letter-spacing: -0.02em; margin-top: 2px; }
+  .ov-stat .s { color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ov-stat .s.bad { color: var(--critical); }
+  .live { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--good); animation: live 1.6s ease-in-out infinite; }
+  @keyframes live { 50% { opacity: 0.3; } }
+  @media (prefers-reduced-motion: reduce) { .live { animation: none; } }
+
+  .ov-usage { margin-top: 8px; }
+  .ov-row {
+    display: grid; grid-template-columns: minmax(0, 1.3fr) repeat(3, minmax(0, 1fr)) 56px; column-gap: 20px; align-items: center;
+    padding: 9px 0; border-top: 1px solid var(--border);
+  }
+  .ov-row.ov-group { border-top: 0; padding: 12px 0 7px; align-items: end; }
+  .ov-prov { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 650; }
+  .ov-col { color: var(--text-muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+  .ov-col.right, .ov-share { text-align: right; }
+  .ov-who { min-width: 0; }
+  .ov-name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ov-name .dom { color: var(--text-muted); font-weight: 400; }
+  .ov-state { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; }
+  .ov-state .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .ov-state.running { color: var(--text-secondary); }
+  .ov-state.warning { color: var(--warning); }
+  .ov-state.critical { color: var(--critical); }
+  .ov-cell { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "v r" "bar bar"; align-items: baseline; gap: 5px 8px; min-width: 0; }
+  .ov-cell .v { grid-area: v; font-size: 13.5px; font-weight: 600; }
+  .ov-cell .r { grid-area: r; text-align: right; color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; }
+  .ov-cell .meter { grid-area: bar; height: 6px; margin: 0; }
+  .ov-cell .meter .pace { top: -2px; bottom: -2px; }
+  .ov-cell.high .v { color: var(--warning); }
+  .ov-cell.full .v { color: var(--critical); }
+  .ov-cell.none .v { color: var(--text-muted); font-weight: 400; }
+  .ov-share { font-family: var(--font-data); font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 600; letter-spacing: -0.02em; }
+  .ov-share.none { color: var(--text-muted); font-weight: 400; }
+  .ov-row.off .ov-name, .ov-row.off .ov-cell, .ov-row.off .ov-share { opacity: 0.45; }
+
+  .ov-time { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .ov-time-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 14px; color: var(--text-muted); font-size: 12px; }
+  .keys { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; }
+  .keys .key { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+  .keys .dot { width: 8px; height: 8px; }
+  .tl { display: flex; align-items: stretch; gap: 3px; height: 48px; margin-top: 8px; border-bottom: 1px solid var(--border-strong); }
+  .tl-slot { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column-reverse; justify-content: flex-start; gap: 2px; cursor: default; }
+  .tl-seg { flex: 0 0 auto; background: var(--prov); border-radius: 2px; }
+  .tl-seg.zero { height: 2px; background: var(--border-strong); border-radius: 1px; }
+  .tl-axis { display: flex; justify-content: space-between; margin-top: 4px; color: var(--text-muted); font-size: 11px; font-family: var(--font-data); }
+
+  /* tiles: one strip, divided by hairlines */
+  .tiles {
+    display: grid; grid-template-columns: 1fr 1fr 1.7fr 1fr 1fr; gap: 1px; margin-top: 12px; overflow: hidden;
+    background: var(--border); border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  .tile { background: var(--surface); padding: 14px 16px; min-width: 0; }
+  .tile .label { color: var(--text-muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .tile .value { font-variant-numeric: tabular-nums; font-size: 26px; line-height: 1.2; font-weight: 650; letter-spacing: -0.02em; margin-top: 5px; overflow-wrap: anywhere; }
+  .tile .value .unit { font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--text-muted); }
+  .tile .value.text { font-size: 17px; letter-spacing: -0.01em; padding: 6px 0 4px; }
+  .tile .sub { color: var(--text-muted); font-size: 12.5px; margin-top: 3px; overflow-wrap: anywhere; }
 
   /* account groups and cards */
-  .group-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin: 34px 0 12px; }
-  .group-head h2 { display: flex; align-items: center; gap: 8px; }
-  .count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--pill-bg); color: var(--text-secondary); font-size: 12px; font-weight: 600; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
-  .card { padding: 18px; min-width: 0; display: flex; flex-direction: column; }
+  .group-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin: 28px 0 10px; }
+  .group-head h2 { display: flex; align-items: center; gap: 9px; }
+  .count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--raised); border: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 12px; }
+  .card { padding: 16px 18px 18px; min-width: 0; display: flex; flex-direction: column; }
   .card-head { display: flex; align-items: center; gap: 10px; min-height: 26px; }
   .card-head .name { font-weight: 650; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: auto; }
   .head-right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
@@ -123,9 +199,10 @@
   .window.muted { font-size: 13px; }
   .window-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 13px; }
   .window-top .wname { font-weight: 600; }
-  .meter { position: relative; height: 10px; border-radius: 5px; background: var(--meter-track); margin: 7px 0 6px; }
-  .meter .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--meter-fill); min-width: 0; }
-  .meter .pace { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--pace-tick); border-radius: 1px; box-shadow: 0 0 0 2px var(--surface); }
+  .window-top .num strong { font-family: var(--font-data); letter-spacing: -0.02em; }
+  .meter { position: relative; height: 8px; border-radius: 4px; margin: 7px 0 6px; background: var(--raised); background: color-mix(in srgb, var(--prov) 17%, var(--raised)); }
+  .meter .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--prov); min-width: 0; }
+  .meter .pace { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text-primary); border-radius: 1px; box-shadow: 0 0 0 2px var(--surface); }
   .window-sub { color: var(--text-muted); font-size: 12.5px; }
   .card-foot {
     margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);
@@ -133,28 +210,28 @@
   }
   .foot-text { min-width: 0; font-size: 13px; }
   .foot-weight { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
-  .stepper { display: inline-flex; align-items: stretch; height: 30px; border: 1px solid var(--border); border-radius: 9px; background: var(--inset); overflow: hidden; }
+  .stepper { display: inline-flex; align-items: stretch; height: 30px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--raised); overflow: hidden; }
   .stepper button { width: 30px; padding: 0; border: 0; background: transparent; cursor: pointer; font-size: 16px; line-height: 1; color: var(--text-secondary); }
-  .stepper button:hover { background: var(--pill-bg); color: var(--text-primary); }
+  .stepper button:hover { background: var(--hover); color: var(--text-primary); }
   .stepper input {
-    width: 38px; padding: 0; border: 0; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
-    background: var(--surface); text-align: center; font-weight: 650; font-variant-numeric: tabular-nums; -moz-appearance: textfield;
+    width: 38px; padding: 0; border: 0; border-left: 1px solid var(--border-strong); border-right: 1px solid var(--border-strong);
+    background: var(--inset); text-align: center; font-family: var(--font-data); font-weight: 600; font-variant-numeric: tabular-nums; -moz-appearance: textfield;
   }
   .stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .spark { display: flex; align-items: flex-end; gap: 2px; height: 36px; }
-  .spark .bar { width: 6px; border-radius: 3px 3px 0 0; background: var(--meter-fill); }
-  .spark .bar.zero { height: 2px; background: var(--border); border-radius: 1px; }
+  .spark .bar { width: 6px; border-radius: 2px 2px 0 0; background: var(--prov); }
+  .spark .bar.zero { height: 2px; background: var(--border-strong); border-radius: 1px; }
   .spark .slot { display: flex; align-items: flex-end; height: 36px; padding: 0; cursor: default; }
   .switch {
     position: relative; flex: 0 0 auto; width: 40px; height: 24px; padding: 0; border-radius: 999px; cursor: pointer;
-    border: 1px solid var(--border); background: var(--pill-bg);
+    border: 1px solid var(--border-strong); background: var(--raised);
   }
   .switch .knob {
     position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
     background: var(--text-muted); transition: left 0.12s ease;
   }
-  .switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
-  .switch[aria-checked="true"] .knob { left: 18px; background: #fff; }
+  .switch[aria-checked="true"] { background: var(--prov); border-color: var(--prov); }
+  .switch[aria-checked="true"] .knob { left: 18px; background: var(--page); }
   .switch:disabled { opacity: 0.5; cursor: progress; }
   .card.off .windows, .card.off .card-foot { opacity: 0.45; }
 
@@ -162,15 +239,15 @@
   .resets-label { color: var(--text-secondary); font-size: 13px; font-weight: 600; margin-right: 2px; }
   .reset-btn {
     display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 12px; border-radius: 9px; cursor: pointer;
-    background: var(--surface); border: 1px solid var(--border); font-size: 13px;
+    background: var(--raised); border: 1px solid var(--border-strong); font-size: 13px;
   }
-  .reset-btn:hover:not(:disabled) { border-color: var(--accent); }
+  .reset-btn:hover:not(:disabled) { border-color: var(--prov); }
   .reset-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .reset-btn .count { min-width: 20px; height: 20px; font-size: 11.5px; }
+  .reset-btn .count { min-width: 20px; height: 20px; font-size: 11.5px; background: var(--inset); }
   .card.off .resets { opacity: 0.45; }
   .linkish { background: none; border: 0; padding: 0; cursor: pointer; color: var(--text-secondary); text-decoration: underline; font-size: 12.5px; }
-  dialog { width: min(460px, calc(100vw - 32px)); padding: 22px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text-primary); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28); }
-  dialog::backdrop { background: rgba(10, 10, 9, 0.45); }
+  dialog { width: min(460px, calc(100vw - 32px)); padding: 22px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--raised); color: var(--text-primary); box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6); }
+  dialog::backdrop { background: rgba(5, 5, 4, 0.7); }
   dialog p { margin: 12px 0 0; }
   .facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 14px 0 0; }
   .facts dt { color: var(--text-muted); }
@@ -178,42 +255,63 @@
   .ack { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--warning); }
   .ack input { margin-top: 3px; }
   .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   body.busy { cursor: progress; }
   body.busy .reset-btn { pointer-events: none; opacity: 0.5; }
 
-  .legend { color: var(--text-muted); font-size: 12.5px; margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; }
+  .legend { --prov: var(--text-secondary); color: var(--text-muted); font-size: 12.5px; margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; }
   .legend span.item { display: inline-flex; align-items: center; gap: 8px; }
-  .legend .tick { display: inline-block; width: 2px; height: 13px; background: var(--pace-tick); border-radius: 1px; }
-  .legend .chip { height: 20px; font-size: 12px; padding: 0 8px; color: var(--text-primary); }
+  .legend .tick { flex: 0 0 auto; display: inline-block; width: 2px; height: 13px; background: var(--text-primary); border-radius: 1px; }
+  .legend .chip { height: 20px; font-size: 11.5px; padding: 0 8px; color: var(--text-primary); }
 
   /* recent requests */
-  .section-head { display: flex; align-items: baseline; gap: 10px; margin: 34px 0 12px; }
+  .section-head { display: flex; align-items: baseline; gap: 10px; margin: 28px 0 10px; }
   .table-wrap { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; min-width: 660px; font-size: 13.5px; }
-  th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  th { font-weight: 600; color: var(--text-muted); font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; padding-top: 12px; padding-bottom: 10px; }
-  tbody tr:hover td { background: var(--inset); }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 16px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { font-weight: 600; color: var(--text-muted); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; padding-top: 12px; padding-bottom: 10px; }
+  tbody tr:hover td { background: var(--raised); }
   tr:last-child td { border-bottom: 0; }
   td.right, th.right { text-align: right; }
+  td.num { font-family: var(--font-data); font-size: 12.5px; letter-spacing: -0.02em; }
   td.time { color: var(--text-secondary); }
   .empty { padding: 26px 18px; color: var(--text-muted); }
 
-  .banner { margin-top: 16px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--critical); background: var(--surface); }
-  .banner { cursor: pointer; }
+  .banner { margin-top: 14px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--critical); background: var(--surface); cursor: pointer; }
   .banner.good { border-color: var(--good); }
   .banner.warning { border-color: var(--warning); }
   #login { max-width: 420px; margin: 14vh auto 0; }
   #login .card { padding: 26px; display: block; }
   #login p { margin: 8px 0 18px; }
-  #login input { width: 100%; height: 38px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--inset); margin: 6px 0 14px; }
-  #login .btn { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  #login input { width: 100%; height: 38px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--border-strong); background: var(--inset); margin: 6px 0 14px; }
+  #login .btn { margin-right: 8px; }
   #tip {
     position: fixed; z-index: 10; pointer-events: none; display: none; max-width: 300px;
     background: var(--text-primary); color: var(--page); padding: 7px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.4;
   }
   [hidden] { display: none !important; }
+
+  @media (min-width: 601px) and (max-width: 1000px) {
+    .tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .tile { grid-column: span 2; }
+    .tile:nth-child(n+4) { grid-column: span 3; }
+  }
+  @media (max-width: 600px) {
+    main { padding-block: 12px 40px; }
+    .overview { margin-top: 12px; padding: 14px 14px 12px; }
+    .ov-stat { padding: 8px 9px; }
+    .ov-stat .k { font-size: 10px; letter-spacing: 0.04em; }
+    .ov-stat .v { font-size: 20px; }
+    .ov-stat .s { font-size: 11px; }
+    .ov-row { grid-template-columns: minmax(0, 1fr) repeat(3, 54px) 36px; column-gap: 8px; }
+    .ov-name .dom { display: none; }
+    .ov-cell { grid-template-columns: minmax(0, 1fr); grid-template-areas: "v" "bar" "r"; gap: 3px; }
+    .ov-cell .r { text-align: left; font-size: 10.5px; }
+    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tile { padding: 12px 14px; }
+    .tile.wide { grid-column: 1 / -1; }
+    .tile .value { font-size: 22px; }
+    .card { padding: 14px 14px 16px; }
+  }
 </style>
 </head>
 <body>
@@ -225,7 +323,7 @@
       <form id="login-form">
         <label for="key-input" class="secondary small">Management key</label>
         <input id="key-input" type="password" autocomplete="off" required>
-        <button type="submit" class="btn">Open dashboard</button>
+        <button type="submit" class="btn primary">Open dashboard</button>
         <span id="login-error" class="pill critical" hidden><span class="ico">&#10005;</span>Key not accepted</span>
       </form>
     </div>
@@ -234,17 +332,17 @@
   <section id="app" hidden>
     <header class="top">
       <div class="brand">
-        <span class="logo" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="2.6" fill="#fff" stroke="none"/><path d="M10 7.4V3.2M12.3 11.3l3.6 2.1M7.7 11.3l-3.6 2.1"/><circle cx="10" cy="2.6" r="1.4" fill="#fff" stroke="none"/><circle cx="16.6" cy="13.8" r="1.4" fill="#fff" stroke="none"/><circle cx="3.4" cy="13.8" r="1.4" fill="#fff" stroke="none"/></svg></span>
+        <span class="logo" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round"><path class="spoke" d="M10 7.4V3.2M12.3 11.3l3.6 2.1M7.7 11.3l-3.6 2.1"/><circle class="core" cx="10" cy="10" r="2.6"/><circle class="n-claude" cx="10" cy="2.6" r="1.6"/><circle class="n-openai" cx="16.6" cy="13.8" r="1.6"/><circle class="n-other" cx="3.4" cy="13.8" r="1.6"/></svg></span>
         <div><h1>CLIProxyAPI hub</h1><div id="host" class="muted small"></div></div>
       </div>
       <span id="hub-status" class="pill"><span class="ico">&#9679;</span>Connecting</span>
-      <span class="grow"></span>
-      <span id="updated" class="muted small num"></span>
-      <button id="refresh" type="button" class="btn">Refresh</button>
-      <a href="/management.html" class="btn">Management panel</a>
-      <button id="logout" type="button" class="btn ghost">Sign out</button>
+      <button id="refresh" type="button" class="btn icon" aria-label="Refresh" data-tip="Refresh now">&#8635;</button>
     </header>
     <div id="banner" class="banner" title="Click to dismiss" hidden></div>
+    <section class="panel overview" aria-labelledby="overview-title">
+      <div class="panel-head"><h2 id="overview-title">Overview</h2><span id="updated" class="muted small num"></span></div>
+      <div id="overview"></div>
+    </section>
     <div id="tiles" class="tiles"></div>
     <div id="accounts"></div>
     <div class="legend">
@@ -254,6 +352,10 @@
     </div>
     <div class="section-head"><h2>Recent requests</h2><span class="muted small">latest 40</span></div>
     <div id="activity" class="table-wrap"></div>
+    <footer class="foot">
+      <a href="/management.html" class="btn ghost">Management panel</a>
+      <button id="logout" type="button" class="btn ghost">Sign out</button>
+    </footer>
   </section>
 </main>
 <dialog id="reset-dialog">
@@ -478,7 +580,7 @@ const providerName = (p) => ({ claude: "Claude", codex: "Codex", xai: "Grok", an
 // ---------- rendering ----------
 function statusPill(account) {
   const cooldown = activeCooldown(account);
-  if (isOff(account)) return '<span class="pill serious"><span class="ico">&#9208;</span>Off</span>';
+  if (isOff(account)) return '<span class="pill off"><span class="ico">&#9208;</span>Off</span>';
   if (cooldown) return '<span class="pill warning"><span class="ico">&#9203;</span>Paused ' + esc(fmtDuration(Date.parse(cooldown.retry_at) - Date.now())) + (cooldown.reason ? " &middot; " + esc(cooldown.reason.replace(/_/g, " ")) : "") + "</span>";
   if (account.unavailable || (account.status && account.status !== "active")) return '<span class="pill critical"><span class="ico">&#10005;</span>' + esc(account.status_message || account.status || "Unavailable") + "</span>";
   return ""; // in use: the switch already says so
@@ -554,12 +656,14 @@ function renderCard(account, next, shares, fableShares) {
     '<div class="card-foot"><div class="foot-text" data-tip="' + esc((account.success || 0) + " succeeded and " + (account.failed || 0) + " failed since the hub started") + '"><div class="num"><strong>' + spark.total + "</strong> " + (spark.total === 1 ? "request" : "requests") + ' <span class="muted">' + esc(spark.span) + "</span>" + (spark.failed ? " &middot; " + spark.failed + " failed" : "") + "</div>" +
     '<div class="muted small">' + (observed ? "Limits read " + esc(fmtAgo(observed)) : shown.loadedAt ? "Limits loaded " + esc(fmtAgo(shown.loadedAt)) : "Limits not read yet") + "</div></div>" + spark.html + weightField + "</div></article>";
 }
-function renderAccounts(accounts) {
+// Accounts by provider, Claude first.
+function groupAccounts(accounts) {
   const groups = {};
   for (const account of accounts) (groups[account.provider] = groups[account.provider] || []).push(account);
-  const order = Object.keys(groups).sort((a, b) => (a === "claude" ? -1 : b === "claude" ? 1 : a.localeCompare(b)));
-  $("accounts").innerHTML = order.map((provider) => {
-    const list = groups[provider];
+  return Object.keys(groups).sort((a, b) => (a === "claude" ? -1 : b === "claude" ? 1 : a.localeCompare(b))).map((provider) => [provider, groups[provider]]);
+}
+function renderAccounts(accounts) {
+  $("accounts").innerHTML = groupAccounts(accounts).map(([provider, list]) => {
     const smart = lastData && lastData.config && lastData.config.routing && lastData.config.routing.strategy === "smart-round-robin";
     const shares = smart ? smartShares(list) : null;
     const fableShares = smart && fableKnownToHub(list) ? smartShares(list, true) : null;
@@ -570,8 +674,160 @@ function renderAccounts(accounts) {
     const soonest = weekly.length ? Math.min(...weekly.map((w) => w.resetAt)) : null;
     const windowName = weekly.length && weekly.every((w) => w.minutes === 10080) ? "weekly" : "long-window";
     const summary = (left === null ? "" : pct(Math.round(left)) + " " + windowName + " quota left on average") + (soonest ? " &middot; next reset in " + fmtDuration(soonest - now) : "");
-    return '<div class="group-head"><h2>' + esc(providerName(provider)) + '<span class="count num">' + list.length + '</span></h2><span class="muted num">' + summary + '</span></div><div class="cards">' + list.map((a) => renderCard(a, next, shares, fableShares)).join("") + "</div>";
+    return '<section data-provider="' + esc(provider) + '"><div class="group-head"><h2><span class="dot"></span>' + esc(providerName(provider)) + '<span class="count num">' + list.length + '</span></h2><span class="muted num">' + summary + '</span></div><div class="cards">' + list.map((a) => renderCard(a, next, shares, fableShares)).join("") + "</div></section>";
   }).join("") || '<div class="card empty" style="margin-top:18px">No accounts are signed in to the hub.</div>';
+}
+// ---------- overview ----------
+// What is running now, then one row per account with its limits side by side.
+const RECENT_MS = 5 * 60000;
+function shortWindowLabel(minutes) {
+  if (minutes === 300) return "5h";
+  if (minutes === 10080) return "Week";
+  if (minutes % 1440 === 0) return minutes / 1440 + "d";
+  return Math.round(minutes / 60) + "h";
+}
+function nameParts(account) {
+  const full = String(account.email || account.label || account.name || "");
+  const at = full.indexOf("@");
+  return at > 0 ? { local: full.slice(0, at), domain: full.slice(at + 1) } : { local: full, domain: "" };
+}
+function shortName(account) {
+  const parts = nameParts(account);
+  return parts.local + (parts.domain ? "@" : "");
+}
+function overviewCell(w, name) {
+  const now = Date.now();
+  const used = !w || w.used === null || (w.resetAt && w.resetAt <= now) ? null : clamp(w.used, 0, 100);
+  if (used === null) return '<div class="ov-cell none"' + (w ? ' data-tip="' + esc(name + ": no current reading") + '"' : "") + '><span class="v">&ndash;</span></div>';
+  const left = w.resetAt ? w.resetAt - now : null;
+  const elapsed = left === null ? null : clamp((1 - left / (w.minutes * 60000)) * 100, 0, 100);
+  const tip = name + ": " + pct(used) + " used" + (left === null ? "" : ", resets in " + fmtDuration(left) + " (" + fmtWhen(w.resetAt) + "). " + Math.round(elapsed) + "% of the window's time has passed.");
+  return '<div class="ov-cell' + (used >= 100 ? " full" : used >= 90 ? " high" : "") + '" data-tip="' + esc(tip) + '"><span class="v mono">' + Math.round(used) + '%</span><span class="r num">' + (left === null ? "" : esc(fmtDuration(left))) + '</span>' +
+    '<div class="meter"><div class="fill" style="width:' + used + '%"></div>' + (elapsed === null ? "" : '<div class="pace" style="left:calc(' + elapsed + '% - 1px)"></div>') + "</div></div>";
+}
+// [kind, text, live] for the line under an account's name.
+function overviewState(account, running, last) {
+  const cooldown = activeCooldown(account);
+  if (isOff(account)) return ["", "Off", false];
+  if (cooldown) return ["warning", "Paused " + fmtDuration(Date.parse(cooldown.retry_at) - Date.now()), false];
+  if (account.unavailable || (account.status && account.status !== "active")) return ["critical", account.status_message || account.status || "Unavailable", false];
+  if (running) return ["running", running + " running", true];
+  if (!last) return ["", "No requests yet", false];
+  const ago = Date.now() - last;
+  return ["", ago < 60000 ? "Active just now" : "Idle " + fmtDuration(ago), false];
+}
+// Requests over time, stacked by provider, from the accounts' request counts.
+function renderTimeline(groups) {
+  const times = [];
+  const byTime = {};
+  for (const [provider, list] of groups) {
+    for (const account of list) {
+      for (const bucket of account.recent_requests || []) {
+        if (!byTime[bucket.time]) { byTime[bucket.time] = { total: 0, failed: 0, by: {} }; times.push(bucket.time); }
+        const n = (bucket.success || 0) + (bucket.failed || 0);
+        byTime[bucket.time].total += n;
+        byTime[bucket.time].failed += bucket.failed || 0;
+        byTime[bucket.time].by[provider] = (byTime[bucket.time].by[provider] || 0) + n;
+      }
+    }
+  }
+  if (!times.length) return "";
+  const max = Math.max(1, ...times.map((time) => byTime[time].total));
+  const slots = times.map((time) => {
+    const bucket = byTime[time];
+    const parts = groups.filter(([provider]) => bucket.by[provider] > 0);
+    const tip = time.replace("-", "\u2013") + " \u00b7 " + bucket.total + (bucket.total === 1 ? " request" : " requests") +
+      (parts.length ? " (" + parts.map(([provider]) => providerName(provider) + " " + bucket.by[provider]).join(", ") + ")" : "") + (bucket.failed ? ", " + bucket.failed + " failed" : "");
+    const segments = parts.map(([provider]) => '<span class="tl-seg" data-provider="' + esc(provider) + '" style="height:' + Math.max(2, Math.round((bucket.by[provider] / max) * 40)) + 'px"></span>').join("");
+    return '<span class="tl-slot" data-tip="' + esc(tip) + '">' + (segments || '<span class="tl-seg zero"></span>') + "</span>";
+  }).join("");
+  const keys = groups.map(([provider]) => '<span class="key" data-provider="' + esc(provider) + '"><span class="dot"></span>' + esc(providerName(provider)) + "</span>").join("");
+  const total = times.reduce((sum, time) => sum + byTime[time].total, 0);
+  return '<div class="ov-time"><div class="ov-time-head"><span><span class="num">' + total + "</span> requests over time</span>" + '<span class="keys">' + keys + "</span></div>" +
+    '<div class="tl" role="img" aria-label="' + esc(total + " requests between " + times[0].split("-")[0] + " and " + times[times.length - 1].split("-")[1]) + '">' + slots + "</div>" +
+    '<div class="tl-axis"><span>' + esc(times[0].split("-")[0]) + "</span><span>" + esc(times[times.length - 1].split("-")[1]) + "</span></div></div>";
+}
+function renderOverview(accounts, config, log) {
+  const now = Date.now();
+  const routing = (config && config.routing) || {};
+  // Which account a request went to is only logged with session affinity on.
+  const tracked = Boolean(routing["session-affinity"]);
+  const recent = log.rows.filter((r) => now - r.at < RECENT_MS);
+  const failed = recent.filter((r) => r.status >= 400).length;
+  const sessions = new Set(recent.map((r) => r.session).concat(log.running.map((r) => r.session)).filter(Boolean));
+  const runningBy = {};
+  const lastBy = {};
+  for (const r of log.running) { runningBy[r.auth] = (runningBy[r.auth] || 0) + 1; lastBy[r.auth] = Math.max(lastBy[r.auth] || 0, r.at || 0); }
+  for (const r of log.rows) if (r.auth) lastBy[r.auth] = Math.max(lastBy[r.auth] || 0, r.at || 0);
+  const speed = speedSummary();
+
+  // What needs a look: accounts that are out of service and limits that are nearly used up.
+  const notes = [];
+  for (const account of accounts) {
+    const who = "<strong>" + esc(shortName(account)) + "</strong> ";
+    const cooldown = activeCooldown(account);
+    if (isOff(account)) { notes.push(["off", "&#9208;", who + "off"]); continue; }
+    if (cooldown) notes.push(["warning", "&#9203;", who + "paused " + esc(fmtDuration(Date.parse(cooldown.retry_at) - now)) + (cooldown.reason ? " &middot; " + esc(cooldown.reason.replace(/_/g, " ")) : "")]);
+    else if (account.unavailable || (account.status && account.status !== "active")) notes.push(["critical", "&#10005;", who + esc(account.status_message || account.status || "unavailable")]);
+    const shown = shownWindows(account);
+    for (const w of shown.windows.concat(shown.scoped)) {
+      if (w.used === null || !(w.resetAt > now) || w.used < 90) continue;
+      const label = w.label || windowLabel(w.minutes).toLowerCase();
+      notes.push([w.used >= 100 ? "critical" : "warning", "&#9650;", who + esc(label) + (w.used >= 100 ? " used up" : " at " + Math.round(w.used) + "%") + " &middot; resets in " + esc(fmtDuration(w.resetAt - now))]);
+    }
+  }
+  const rank = { critical: 0, warning: 1, off: 2 };
+  notes.sort((a, b) => rank[a[0]] - rank[b[0]]);
+  const shownNotes = notes.slice(0, 5);
+  if (notes.length > shownNotes.length) shownNotes.push(["off", "", "+" + (notes.length - shownNotes.length) + " more below"]);
+  if (!notes.length) shownNotes.push(["good", "&#10003;", accounts.length ? "<strong>All " + accounts.length + " accounts</strong> available, none near a limit" : "No accounts are signed in"]);
+  const notesHtml = shownNotes.map(([kind, icon, html]) => '<span class="note ' + kind + '">' + (icon ? '<span class="ico">' + icon + "</span>" : "") + "<span>" + html + "</span></span>").join("");
+
+  const stat = (label, value, sub, bad, tip, live) => '<div class="ov-stat" data-tip="' + esc(tip) + '"><div class="k">' + label + (live ? '<span class="live"></span>' : "") + '</div><div class="v">' + value + '</div><div class="s' + (bad ? " bad" : "") + '">' + sub + "</div></div>";
+  const stats =
+    stat("Running", tracked ? log.running.length : "&ndash;", "now", false, tracked ? "Requests the hub is answering right now." : "Not known: the hub only logs this with session affinity on.", tracked && log.running.length > 0) +
+    stat("Sessions", tracked ? sessions.size : "&ndash;", "last 5 min", false, tracked ? "Sessions with a request in the last 5 minutes." : "Not known: the hub only logs this with session affinity on.") +
+    stat("Requests", recent.length, failed ? failed + " failed" : "last 5 min", failed > 0, "Requests finished in the last 5 minutes" + (failed ? "; " + failed + " of them failed." : "; none failed.")) +
+    stat("Tokens/s", speed ? Math.round(speed.rate) : "&ndash;", "output", false, speed ? "Output tokens per second of generation, over the " + speed.count + (speed.count === 1 ? " request" : " requests") + " finished in the last 5 minutes." : "No finished requests in the last 5 minutes.");
+
+  const groups = groupAccounts(accounts);
+  const smart = routing.strategy === "smart-round-robin";
+  const usage = groups.map(([provider, list]) => {
+    const shares = smart ? smartShares(list) : null;
+    const next = smart ? null : nextUp(list);
+    const shown = {};
+    for (const account of list) shown[account.id] = shownWindows(account);
+    // The columns follow the account with the most windows: its shortest and its longest.
+    const sample = list.map((account) => shown[account.id].windows).sort((a, b) => b.length - a.length)[0] || [];
+    const longMinutes = sample.length ? sample[sample.length - 1].minutes : 10080;
+    const shortMinutes = sample.length > 1 ? sample[0].minutes : longMinutes === 300 ? 0 : 300;
+    const scopedLabel = (list.map((account) => shown[account.id].scoped[0]).find(Boolean) || {}).label || "";
+    const head = '<div class="ov-row ov-group"><div class="ov-prov"><span class="dot"></span>' + esc(providerName(provider)) + '</div><div class="ov-col">' + (shortMinutes ? shortWindowLabel(shortMinutes) : "") + '</div><div class="ov-col">' + shortWindowLabel(longMinutes) + '</div><div class="ov-col">' + esc(scopedLabel.replace(/ weekly$/, "")) +
+      '</div><div class="ov-col right" data-tip="Share of new sessions this account gets">' + (smart ? "Share" : "") + "</div></div>";
+    const rows = list.map((account) => {
+      const windows = shown[account.id].windows;
+      const short = windows.find((w) => w.minutes === shortMinutes) || null;
+      const long = windows.find((w) => w.minutes === longMinutes) || null;
+      const scoped = shown[account.id].scoped[0] || null;
+      const observed = account.quota && account.quota.observed_at ? Date.parse(account.quota.observed_at) : 0;
+      const [kind, text, live] = overviewState(account, runningBy[account.id] || 0, Math.max(lastBy[account.id] || 0, observed || 0));
+      const parts = nameParts(account);
+      const mine = shares && shares[account.id];
+      let share = '<div class="ov-share none">&ndash;</div>';
+      if (mine) {
+        const value = mine.share * 100;
+        share = '<div class="ov-share' + (mine.learning ? " none" : "") + '" data-tip="' + esc(mine.learning ? "Share of new sessions. Its limits are not known yet, so it gets the next new session." : "Share of new sessions") + '">' + (value > 0 && value < 1 ? "&lt;1%" : Math.round(value) + "%") + "</div>";
+      } else if (next && next.id === account.id) {
+        share = '<div class="ov-share" data-tip="New sessions go to this account.">next</div>';
+      }
+      return '<div class="ov-row' + (isOff(account) ? " off" : "") + '"><div class="ov-who"><div class="ov-name" data-tip="' + esc(account.email || account.label || account.name) + '">' + esc(parts.local) + (parts.domain ? '@<span class="dom">' + esc(parts.domain) + "</span>" : "") +
+        '</div><div class="ov-state ' + kind + '">' + (live ? '<span class="live"></span>' : "") + '<span class="t">' + esc(text) + "</span></div></div>" +
+        overviewCell(short, windowLabel(shortMinutes || 300)) + overviewCell(long, windowLabel(longMinutes)) + overviewCell(scoped, scopedLabel || "Model limit") + share + "</div>";
+    }).join("");
+    return '<div data-provider="' + esc(provider) + '">' + head + rows + "</div>";
+  }).join("");
+
+  $("overview").innerHTML = '<div class="ov-notes">' + notesHtml + '</div><div class="ov-stats">' + stats + '</div><div class="ov-usage">' + usage + "</div>" + renderTimeline(groups);
 }
 function renderTiles(accounts, config) {
   const routing = (config && config.routing) || {};
@@ -584,8 +840,8 @@ function renderTiles(accounts, config) {
   const keys = ((config && config["api-keys"]) || []).map((k) => { const m = /^sk-(.+)-[0-9a-f]{16,}$/.exec(k); return m ? m[1] : "unnamed"; });
   const tiles = [
     ["Accounts available", '<span class="num">' + usable + '</span> <span class="muted" style="font-size:15px;font-weight:400">of ' + accounts.length + "</span>", Object.keys(byProvider).map((p) => byProvider[p] + " " + providerName(p)).join(" · "), false],
-    ["Routing", esc(strategy), (routing.strategy === "smart-round-robin" ? "By weight, weekly urgency and 5-hour headroom; Fable sessions also by the Fable allowance. " : "") + (routing["session-affinity"] ? "Sessions keep their account for " + esc(routing["session-affinity-ttl"] || "1h") + " of inactivity." : "Sessions are not kept on one account."), true],
     ["Requests " + esc(span), '<span class="num">' + total + "</span>", failed ? failed + " failed" : "none failed", false],
+    ["Routing", esc(strategy), (routing.strategy === "smart-round-robin" ? "By weight, weekly urgency and 5-hour headroom; Fable sessions also by the Fable allowance. " : "") + (routing["session-affinity"] ? "Sessions keep their account for " + esc(routing["session-affinity-ttl"] || "1h") + " of inactivity." : "Sessions are not kept on one account."), true],
     ["Client keys", '<span class="num">' + keys.length + "</span>", esc(keys.join(", ")), false],
   ];
   const speed = speedSummary();
@@ -595,7 +851,7 @@ function renderTiles(accounts, config) {
     speed ? "last 5 min &middot; " + speed.count + (speed.count === 1 ? " request" : " requests") : recording ? "no finished requests in the last 5 min" : "usage recording is switched off in the hub",
     false,
     speed ? "Output tokens divided by generation time, over the requests finished in the last 5 minutes. " + speed.models.map((m) => m.model + " " + Math.round(m.rate) + "/s").join(", ") + "." : ""]);
-  $("tiles").innerHTML = tiles.map(([label, value, sub, text, tip]) => '<div class="tile"' + (tip ? ' data-tip="' + esc(tip) + '"' : "") + '><div class="label">' + label + '</div><div class="value' + (text ? " text" : "") + '">' + value + '</div><div class="sub">' + sub + "</div></div>").join("");
+  $("tiles").innerHTML = tiles.map(([label, value, sub, text, tip]) => '<div class="tile' + (text ? " wide" : "") + '"' + (tip ? ' data-tip="' + esc(tip) + '"' : "") + '><div class="label">' + label + '</div><div class="value' + (text ? " text" : "") + '">' + value + '</div><div class="sub">' + sub + "</div></div>").join("");
 }
 
 // ---------- output speed, from the hub's usage records ----------
@@ -635,26 +891,46 @@ function speedSummary() {
 // ---------- recent requests, from the hub log ----------
 const LINE = /^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\] \[([0-9a-f-]{8})\] \[\w+\s*\] \[[^\]]+\] (.*)$/;
 const HTTP = /^(\d{3}) \|\s+(\S+) \|\s+(\S+) \| (\w+)\s+"([^"]+)"/;
-const BIND = /^session-affinity: ([^|]+)\| session=\S+ auth=(\S+)(?: provider=\S+)?(?: model=(\S+))?/;
-function renderActivity(accounts) {
-  const emailOf = {};
-  for (const a of accounts) emailOf[a.id] = a.email || a.label || a.id;
-  const bindings = {};
+const BIND = /^session-affinity: ([^|]+)\| session=(\S+) auth=(\S+)(?: provider=\S+)?(?: model=(\S+))?/;
+const RUNNING_MAX_MS = 15 * 60000;
+// The hub logs its own local time. Its limit readings carry the UTC offset, which places
+// the log lines in time when the page is opened in another time zone.
+function hubOffset(accounts) {
+  for (const account of accounts) {
+    const m = /([+-]\d\d:\d\d|Z)$/.exec((account.quota && account.quota.observed_at) || "");
+    if (m) return m[1];
+  }
+  return "";
+}
+// The hub writes one line when it picks the account for a request and one when the request
+// is finished. rows: finished requests, oldest first. running: picked but not yet finished.
+function parseLog(accounts) {
+  const offset = hubOffset(accounts);
+  const open = {};
   const rows = [];
   for (const line of logLines) {
     const m = LINE.exec(line);
     if (!m || m[2] === "--------") continue;
+    const at = Date.parse(m[1].replace(" ", "T") + offset);
     const bind = BIND.exec(m[3]);
-    if (bind) { bindings[m[2]] = { auth: bind[2], model: bind[3] || "", fresh: /new binding/.test(bind[1]) }; continue; }
+    if (bind) { open[m[2]] = { at, session: bind[2], auth: bind[3], model: bind[4] || "", fresh: /new binding/.test(bind[1]) }; continue; }
     const http = HTTP.exec(m[3]);
     if (!http || !http[5].startsWith("/v1/") || http[5].startsWith("/v1/models")) continue;
-    rows.push({ time: m[1], id: m[2], status: +http[1], duration: http[2], client: http[3], path: http[5].split("?")[0] });
+    const b = open[m[2]] || {};
+    delete open[m[2]];
+    rows.push({ time: m[1], at, id: m[2], status: +http[1], duration: http[2], client: http[3], path: http[5].split("?")[0], session: b.session, auth: b.auth, model: b.model, fresh: b.fresh });
   }
-  const latest = rows.slice(-40).reverse();
+  const now = Date.now();
+  return { rows, running: Object.values(open).filter((request) => now - request.at < RUNNING_MAX_MS) };
+}
+function renderActivity(accounts, log) {
+  const emailOf = {};
+  for (const a of accounts) emailOf[a.id] = a.email || a.label || a.id;
+  const latest = log.rows.slice(-40).reverse();
   if (!latest.length) { $("activity").innerHTML = '<div class="empty">No model requests in the current log window.</div>'; return; }
   $("activity").innerHTML = '<table><thead><tr><th>Time</th><th>Client</th><th>Model</th><th>Account</th><th>Result</th><th class="right">Duration</th></tr></thead><tbody>' +
     latest.map((r) => {
-      const b = bindings[r.id] || {};
+      const b = r; // the row carries the account, model and "new session" mark of its request
       const ok = r.status < 400;
       const result = '<span class="result ' + (ok ? "good" : "critical") + '"><span class="ico">' + (ok ? "&#10003;" : "&#10005;") + '</span><span class="num">' + r.status + "</span></span>";
       const account = b.auth ? esc(emailOf[b.auth] || b.auth) + (b.fresh ? ' <span class="tag" data-tip="First request of a new session">new</span>' : "") : '<span class="muted">&ndash;</span>';
@@ -694,11 +970,13 @@ async function refresh() {
 }
 function render() {
   if (!lastData) return;
+  const log = parseLog(lastData.accounts);
+  renderOverview(lastData.accounts, lastData.config, log);
   renderTiles(lastData.accounts, lastData.config);
   // Do not redraw the cards while a weight is being typed.
   const editing = document.activeElement && document.activeElement.hasAttribute && document.activeElement.hasAttribute("data-weight-for");
   if (!editing) renderAccounts(lastData.accounts);
-  renderActivity(lastData.accounts);
+  renderActivity(lastData.accounts, log);
 }
 function showLogin(rejected) {
   clearInterval(timer);
