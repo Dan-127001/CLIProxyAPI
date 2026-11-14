@@ -512,7 +512,7 @@ function nextUp(accounts) {
   return best && best.rank[0] < 2 ? { id: best.account.id, learning: best.rank[0] === 0 } : null;
 }
 // Mirrors the hub's "smart-round-robin" score (SmartRoundRobinSelector in the hub):
-// weight x urgency x headroom, and each account's share of new sessions.
+// weight x urgency squared x headroom, and each account's share of new sessions.
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 const weightOf = (account) => (typeof account.weight === "number" ? account.weight : 1);
 // True when the hub has seen the Fable allowance with a Fable response on one of the
@@ -521,8 +521,8 @@ function fableKnownToHub(accounts) {
   return accounts.some((account) => Object.values(account.model_quotas || {}).some((reading) => reading && reading.signals &&
     Object.keys(reading.signals).some((name) => name.toLowerCase() === "anthropic-ratelimit-unified-7d_oi-utilization")));
 }
-// With fable set, the shares are those of new Fable sessions: urgency is then capped by
-// the Fable weekly allowance, as in the hub.
+// With fable set, the shares are those of new Fable sessions: urgency is then that of the
+// Fable weekly allowance, scaled down when the week itself would run out early, as in the hub.
 function smartShares(accounts, fable) {
   const now = Date.now();
   const out = {};
@@ -543,10 +543,10 @@ function smartShares(accounts, fable) {
       }
       const allowance = fable && !entry.learning ? modelWindowsOf(account)[0] : null;
       if (allowance && allowance.resetAt > now) {
-        entry.urgency = Math.min(entry.urgency, (1 - clamp(allowance.used, 0, 100) / 100) / clamp((allowance.resetAt - now) / (allowance.minutes * 60000), 0.02, 1));
+        entry.urgency = (1 - clamp(allowance.used, 0, 100) / 100) / clamp((allowance.resetAt - now) / (allowance.minutes * 60000), 0.02, 1) * Math.min(1, entry.urgency);
       }
     }
-    entry.score = Math.max(0, weight) * entry.urgency * entry.headroom;
+    entry.score = Math.max(0, weight) * entry.urgency * entry.urgency * entry.headroom;
     total += entry.score;
     out[account.id] = entry;
   }
@@ -590,7 +590,7 @@ function shareChip(mine) {
   const text = value > 0 && value < 1 ? "<1%" : Math.round(value) + "%";
   const tip = mine.learning
     ? "Share of new sessions. Its limits are not known yet: it gets the next new session so the hub can read them, and a neutral share until then."
-    : "Share of new sessions. Score " + fmtFactor(mine.score) + " = weight " + fmtFactor(mine.weight) + " × weekly urgency " + fmtFactor(mine.urgency) + " × 5-hour headroom " + fmtFactor(mine.headroom) + ". Urgency is quota left divided by time left: above 1, quota would expire unused.";
+    : "Share of new sessions. Score " + fmtFactor(mine.score) + " = weight " + fmtFactor(mine.weight) + " × weekly urgency " + fmtFactor(mine.urgency) + "² × 5-hour headroom " + fmtFactor(mine.headroom) + ". Urgency is quota left divided by time left: above 1, quota would expire unused.";
   return '<span class="chip num' + (mine.learning ? " learning" : "") + '" data-tip="' + esc(tip) + '">' + esc(text) + "</span>";
 }
 function renderWindow(w) {
@@ -841,7 +841,7 @@ function renderTiles(accounts, config) {
   const tiles = [
     ["Accounts available", '<span class="num">' + usable + '</span> <span class="muted" style="font-size:15px;font-weight:400">of ' + accounts.length + "</span>", Object.keys(byProvider).map((p) => byProvider[p] + " " + providerName(p)).join(" · "), false],
     ["Requests " + esc(span), '<span class="num">' + total + "</span>", failed ? failed + " failed" : "none failed", false],
-    ["Routing", esc(strategy), (routing.strategy === "smart-round-robin" ? "By weight, weekly urgency and 5-hour headroom; Fable sessions also by the Fable allowance. " : "") + (routing["session-affinity"] ? "Sessions keep their account for " + esc(routing["session-affinity-ttl"] || "1h") + " of inactivity." : "Sessions are not kept on one account."), true],
+    ["Routing", esc(strategy), (routing.strategy === "smart-round-robin" ? "By weight, weekly urgency and 5-hour headroom; quota that expires first is used first. Fable sessions follow the Fable allowance. " : "") + (routing["session-affinity"] ? "Sessions keep their account for " + esc(routing["session-affinity-ttl"] || "1h") + " of inactivity." : "Sessions are not kept on one account."), true],
     ["Client keys", '<span class="num">' + keys.length + "</span>", esc(keys.join(", ")), false],
   ];
   const speed = speedSummary();

@@ -24,13 +24,15 @@ const (
 )
 
 // SmartRoundRobinSelector spreads new sessions across credentials in proportion to a
-// score that says how much each credential should be used right now. The score is the
-// product of three factors: weight, urgency and headroom.
+// score that says how much each credential should be used right now:
+//
+//	score = weight x urgency^2 x headroom
 //
 // Urgency is the share of the longest quota window (the weekly window on Claude and
 // Codex subscriptions) that is still unused, divided by the share of that window's time
 // that is still left. Above 1 the credential is behind pace and quota would expire
-// unused; below 1 it would run out before the reset.
+// unused; below 1 it would run out before the reset. It counts squared, so quota that is
+// about to expire takes most new sessions and quota that keeps for later is spared.
 //
 // Headroom steers new sessions away from a credential whose short window (5 hours) is
 // nearly used up: it is 1 while more than a quarter of that window is left and falls
@@ -40,8 +42,9 @@ const (
 //
 // Some models have a quota window of their own next to the credential's windows (the
 // Fable weekly allowance on Claude subscriptions). For a request to such a model, urgency
-// is the lower of the credential's and the model's, so sessions for that model avoid a
-// credential whose allowance for it is running out and skip one where it is used up.
+// is that of the model's window, so sessions for it go where its allowance would expire
+// unused and skip a credential where it is used up. It is scaled down when the credential
+// itself would run out before its reset.
 //
 // Selection is a smooth weighted round-robin over these scores, so a burst of parallel
 // sessions is spread instead of landing on one credential before its usage is observed
@@ -64,7 +67,7 @@ type SmartRoundRobinSelector struct {
 
 // smartScore is the routing score of one credential.
 type smartScore struct {
-	// value is weight x urgency x headroom.
+	// value is weight x urgency^2 x headroom.
 	value float64
 	// unknown is set when the credential's windows must be learned with a request first.
 	unknown bool
@@ -277,8 +280,10 @@ func smartRoundRobinScore(auth *Auth, model string, now time.Time) smartScore {
 		return smartScore{value: weight, unknown: true}
 	}
 
-	// modelUrgency caps the urgency by the model's own window. A reading whose window has
-	// rolled over says nothing about the current one and is ignored.
+	// modelUrgency replaces the credential's urgency by that of the model's own window,
+	// scaled down when the credential itself is ahead of pace (urgency below 1). A reading
+	// whose window has rolled over says nothing about the current one and is ignored, as
+	// is a credential the window has not been read for yet.
 	modelUrgency := func(urgency float64) float64 {
 		if model == "" {
 			return urgency
@@ -288,13 +293,17 @@ func smartRoundRobinScore(auth *Auth, model string, now time.Time) smartScore {
 			return urgency
 		}
 		timeLeft := clampFloat(float64(window.resetAt.Sub(now))/float64(window.length), smartMinTimeLeftShare, 1)
-		return math.Min(urgency, (1-window.used)/timeLeft)
+		return (1 - window.used) / timeLeft * math.Min(1, urgency)
+	}
+	// score squares the urgency, so the split leans towards quota that is about to expire.
+	score := func(urgency, headroom float64) smartScore {
+		return smartScore{value: weight * urgency * urgency * headroom}
 	}
 
 	windows := quotaWindowResets(auth.Provider, auth.Quota.Signals, auth.Quota.ObservedAt)
 	if len(windows) == 0 {
 		// Observed, but upstream reports no credential window to pace against.
-		return smartScore{value: weight * modelUrgency(1)}
+		return score(modelUrgency(1), 1)
 	}
 	long, short := windows[0], windows[0]
 	for _, window := range windows[1:] {
@@ -321,5 +330,5 @@ func smartRoundRobinScore(auth *Auth, model string, now time.Time) smartScore {
 	if short.length < long.length && short.usedKnown && short.resetAt.After(now) {
 		headroom = clampFloat((1-short.used)/smartShortWindowGuard, 0, 1)
 	}
-	return smartScore{value: weight * urgency * headroom}
+	return score(urgency, headroom)
 }

@@ -63,10 +63,11 @@ func TestSmartRoundRobinScore(t *testing.T) {
 		want        float64
 		wantUnknown bool
 	}{
-		{"nothing used a day before the weekly reset", claudeAuthWithUsage("a", 0, 1.0/7, -1), 7, false},
+		// Urgency counts squared: 7, 1, 0.4 and the bound of 50.
+		{"nothing used a day before the weekly reset", claudeAuthWithUsage("a", 0, 1.0/7, -1), 49, false},
 		{"on pace", claudeAuthWithUsage("a", 0.3, 0.7, -1), 1, false},
-		{"ahead of pace", claudeAuthWithUsage("a", 0.8, 0.5, -1), 0.4, false},
-		{"urgency is bounded just before the reset", claudeAuthWithUsage("a", 0, 0.001, -1), 1 / smartMinTimeLeftShare, false},
+		{"ahead of pace", claudeAuthWithUsage("a", 0.8, 0.5, -1), 0.16, false},
+		{"urgency is bounded just before the reset", claudeAuthWithUsage("a", 0, 0.001, -1), 1 / smartMinTimeLeftShare / smartMinTimeLeftShare, false},
 		{"5-hour window with room left does not matter", claudeAuthWithUsage("a", 0.3, 0.7, 0.5), 1, false},
 		{"5-hour window nearly used up", claudeAuthWithUsage("a", 0.3, 0.7, 0.9), 0.4, false},
 		{"5-hour window used up", claudeAuthWithUsage("a", 0.3, 0.7, 1), 0, false},
@@ -92,13 +93,13 @@ func TestSmartRoundRobinSelectorPick_SharesSessionsByScore(t *testing.T) {
 	now := soonestResetTestNow
 	selector := newSmartRoundRobinTestSelector(&now)
 	auths := []*Auth{
-		claudeAuthWithUsage("a", 0, 1.0/7, -1), // score 7
-		claudeAuthWithUsage("b", 0.3, 0.7, -1), // score 1
+		claudeAuthWithUsage("a", 0, 1.0/7, -1), // urgency 7, score 49
+		claudeAuthWithUsage("b", 0.3, 0.7, -1), // urgency 1, score 1
 	}
 
-	counts := countSmartPicks(t, selector, "claude", auths, 80)
-	if counts["a"] < 69 || counts["a"] > 71 || counts["a"]+counts["b"] != 80 {
-		t.Fatalf("picks = %v, want about 70 for a and 10 for b", counts)
+	counts := countSmartPicks(t, selector, "claude", auths, 100)
+	if counts["a"] < 97 || counts["a"] > 99 || counts["a"]+counts["b"] != 100 {
+		t.Fatalf("picks = %v, want about 98 for a and 2 for b", counts)
 	}
 }
 
@@ -262,13 +263,18 @@ func TestSmartRoundRobinScore_ModelWindow(t *testing.T) {
 		model string
 		want  float64
 	}{
-		{"Fable allowance with more room than the week does not raise the score", withFableReading(onPace(), 0.1, time.Minute), smartTestFableModel, 1},
-		{"Fable allowance running out lowers the score", withFableReading(onPace(), 0.86, time.Minute), smartTestFableModel, 0.2},
+		// The Fable allowance's own urgency, squared: 0.9/0.7 and 0.14/0.7.
+		{"Fable allowance that would expire unused raises the score", withFableReading(onPace(), 0.1, time.Minute), smartTestFableModel, (0.9 / 0.7) * (0.9 / 0.7)},
+		{"Fable allowance running out lowers the score", withFableReading(onPace(), 0.86, time.Minute), smartTestFableModel, 0.04},
 		{"Fable allowance used up", withFableReading(onPace(), 1, time.Minute), smartTestFableModel, 0},
 		{"other models ignore the Fable allowance", withFableReading(onPace(), 1, time.Minute), "", 1},
 		{"no Fable reading yet", onPace(), smartTestFableModel, 1},
 		{"reading from a window that has rolled over", rolledOver, smartTestFableModel, 1},
-		{"newer reading on the credential wins", newerOnCredential, smartTestFableModel, 0.2},
+		{"newer reading on the credential wins", newerOnCredential, smartTestFableModel, 0.04},
+		// Fable urgency 1 (half used, half the time left), week ahead of pace at 0.4.
+		{"a week that would run out early scales the score down", withFableReading(claudeAuthWithUsage("a", 0.8, 0.5, -1), 0.5, time.Minute), smartTestFableModel, 0.16},
+		// Fable urgency 3.5; the week's urgency of 7 does not add to it.
+		{"a week behind pace does not raise the score", withFableReading(claudeAuthWithUsage("a", 0, 1.0/7, -1), 0.5, time.Minute), smartTestFableModel, 12.25},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -312,13 +318,47 @@ func TestSmartRoundRobinSelectorPick_FableSessionsAvoidUsedUpAllowance(t *testin
 			t.Fatalf("Fable pick #%d auth.ID = %q, want %q", i, got, "b")
 		}
 	}
-	// Other models still follow the weekly window: 7 of 8 sessions go to "a".
+	// Other models still follow the weekly window: 49 of 50 sessions go to "a".
 	counts := map[string]int{}
-	for i := 0; i < 16; i++ {
+	for i := 0; i < 50; i++ {
 		counts[pick("claude-opus-5-5", false)]++
 	}
-	if counts["a"] != 14 || counts["b"] != 2 {
-		t.Fatalf("Opus picks = %v, want 14 for a and 2 for b", counts)
+	if counts["a"] != 49 || counts["b"] != 1 {
+		t.Fatalf("Opus picks = %v, want 49 for a and 1 for b", counts)
+	}
+}
+
+func TestSmartRoundRobinSelectorPick_FableSessionsFollowTheAllowance(t *testing.T) {
+	t.Parallel()
+
+	now := soonestResetTestNow
+	selector := newSmartRoundRobinTestSelector(&now)
+	// Both weeks are on pace. Most of "a"'s Fable allowance would expire unused; "b"'s is
+	// nearly gone.
+	auths := []*Auth{
+		withFableReading(claudeAuthWithUsage("a", 0.3, 0.7, -1), 0.1, time.Minute),
+		withFableReading(claudeAuthWithUsage("b", 0.3, 0.7, -1), 0.8, time.Minute),
+	}
+
+	count := func(model string, picks int) map[string]int {
+		t.Helper()
+		counts := map[string]int{}
+		for i := 0; i < picks; i++ {
+			got, err := selector.Pick(context.Background(), "claude", model, cliproxyexecutor.Options{}, auths)
+			if err != nil {
+				t.Fatalf("Pick() error = %v", err)
+			}
+			counts[got.ID]++
+		}
+		return counts
+	}
+
+	// Scores (0.9/0.7)^2 and (0.2/0.7)^2: about 95% of Fable sessions go to "a".
+	if counts := count(smartTestFableModel, 40); counts["a"] < 37 || counts["a"] > 39 {
+		t.Fatalf("Fable picks = %v, want about 38 for a and 2 for b", counts)
+	}
+	if counts := count("claude-opus-5-5", 10); counts["a"] != 5 || counts["b"] != 5 {
+		t.Fatalf("Opus picks = %v, want 5 each", counts)
 	}
 }
 
