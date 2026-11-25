@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#0c0b0a">
 <title>Hub dashboard</title>
 <style>
-  /* Layout: the overview panel comes first (what is running now, then usage per account),
+  /* Layout: the overview panel comes first (when the limits run out, then usage per account),
      the detail panels follow. Dark only. The only chroma is each provider's colour
      (Claude orange, OpenAI white) and the status colours. */
   :root {
@@ -93,10 +93,10 @@
     background: var(--raised); border: 1px solid var(--border); border-radius: 999px; padding: 0 10px; font-size: 12.5px; color: var(--text-secondary);
   }
   .pill .ico { font-size: 11px; line-height: 1; }
-  .pill.good .ico, .result.good .ico, .note.good .ico { color: var(--good); }
-  .pill.warning .ico, .note.warning .ico { color: var(--warning); }
-  .pill.off .ico, .note.off .ico { color: var(--text-muted); }
-  .pill.critical .ico, .result.critical .ico, .note.critical .ico { color: var(--critical); }
+  .pill.good .ico, .result.good .ico { color: var(--good); }
+  .pill.warning .ico { color: var(--warning); }
+  .pill.off .ico { color: var(--text-muted); }
+  .pill.critical .ico, .result.critical .ico { color: var(--critical); }
   .chip {
     display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 999px; white-space: nowrap;
     background: var(--raised); background: color-mix(in srgb, var(--prov) 15%, transparent);
@@ -109,79 +109,101 @@
   .result { display: inline-flex; align-items: center; gap: 6px; }
   .result .ico { font-size: 12px; }
 
-  /* overview: the first panel */
+  /* overview: the first panel. When each limit runs out, then one line per account. */
   .panel, .card, .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
-  .overview { margin-top: 16px; padding: 16px 18px 14px; }
+  .overview { margin-top: 16px; padding: 14px 18px 8px; }
   .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-  .ov-notes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-  .note {
-    display: inline-flex; align-items: center; gap: 7px; min-height: 26px; padding: 3px 10px; border-radius: 8px; font-size: 12.5px;
-    background: var(--raised); border: 1px solid var(--border); color: var(--text-secondary);
-  }
-  .note .ico { font-size: 11px; line-height: 1; }
-  .note strong { color: var(--text-primary); font-weight: 600; }
-  .note.warning { border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); }
-  .note.critical { border-color: color-mix(in srgb, var(--critical) 50%, var(--border)); }
-  .ov-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 12px; background: var(--inset); border: 1px solid var(--border); border-radius: 10px; }
-  .ov-stat { min-width: 0; padding: 10px 14px; border-left: 1px solid var(--border); }
-  .ov-stat:first-child { border-left: 0; }
-  .ov-stat .k { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
-  .ov-stat .v { font-variant-numeric: tabular-nums; font-size: 24px; line-height: 1.2; font-weight: 650; letter-spacing: -0.02em; margin-top: 2px; }
-  .ov-stat .s { color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ov-stat .s.bad { color: var(--critical); }
+  .cap { color: var(--text-muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
   .live { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--good); animation: live 1.6s ease-in-out infinite; }
   @keyframes live { 50% { opacity: 0.3; } }
-  @media (prefers-reduced-motion: reduce) { .live { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .live, .st.running { animation: none; } }
 
-  .ov-usage { margin-top: 8px; }
-  .ov-row {
-    display: grid; grid-template-columns: minmax(0, 1.3fr) repeat(3, minmax(0, 1fr)) 56px; column-gap: 20px; align-items: center;
-    padding: 9px 0; border-top: 1px solid var(--border);
+  /* forecast: one line per limit, all on the same time axis */
+  .rw { margin-top: 10px; }
+  .rw-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding-bottom: 8px; color: var(--text-muted); font-size: 12px; }
+  .rw-head .cap { margin-right: 2px; color: var(--text-secondary); }
+  .rw-head select { height: 24px; padding: 0 4px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--raised); color: var(--text-primary); font: inherit; font-size: 12px; }
+  .rw-empty { padding: 2px 0 8px; color: var(--text-muted); font-size: 13px; }
+  .rw-row {
+    display: grid; grid-template-columns: 118px 132px minmax(0, 1fr); grid-template-areas: "name when track" "name when sub"; column-gap: 18px; row-gap: 4px; align-items: center;
+    padding: 8px 0; border-top: 1px solid var(--border);
   }
-  .ov-row.ov-group { border-top: 0; padding: 12px 0 7px; align-items: end; }
+  .rw-name { grid-area: name; display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13.5px; font-weight: 600; white-space: nowrap; }
+  .rw-name .secondary { font-weight: 400; }
+  .rw-when { grid-area: when; min-width: 0; }
+  .rw-big { font-family: var(--font-data); font-variant-numeric: tabular-nums; font-size: 18px; line-height: 1.2; font-weight: 650; letter-spacing: -0.03em; white-space: nowrap; }
+  .rw-at { color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rw-row.critical .rw-big { color: var(--critical); }
+  .rw-row.warning .rw-big { color: var(--warning); }
+  .rw-row.later .rw-big { color: var(--text-primary); }
+  .rw-row.good .rw-big, .rw-row.off .rw-big { font-family: var(--font-ui); font-size: 14px; letter-spacing: 0; color: var(--text-secondary); }
+  .rw-track { grid-area: track; position: relative; height: 10px; border-radius: 3px; overflow: hidden; background: var(--raised); }
+  .rw-ok, .rw-out, .rw-day { position: absolute; top: 0; bottom: 0; }
+  .rw-ok { background: var(--prov); background: color-mix(in srgb, var(--prov) 62%, var(--surface)); }
+  .rw-out { min-width: 3px; background: repeating-linear-gradient(135deg, var(--critical) 0 3px, #5a2423 3px 6px); }
+  .rw-day { width: 1px; background: var(--surface); }
+  .rw-sub { grid-area: sub; color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rw-sub .num { color: var(--text-secondary); }
+  .rw-row.rw-axis { grid-template-areas: ". . ticks"; padding: 0 0 4px; border-top: 0; }
+  .rw-ticks { grid-area: ticks; position: relative; height: 14px; margin-top: -4px; color: var(--text-muted); font-family: var(--font-data); font-size: 10.5px; }
+  .rw-ticks span { position: absolute; top: 0; white-space: nowrap; }
+
+  /* accounts: one line each */
+  .ov-usage { margin-top: 4px; border-top: 1px solid var(--border-strong); }
+  .ov-row {
+    display: grid; grid-template-columns: minmax(0, 1.25fr) repeat(3, minmax(0, 1fr)) 46px 46px; column-gap: 18px; align-items: center;
+    min-height: 28px; padding: 3px 0; border-top: 1px solid var(--border);
+  }
+  .ov-row.ov-group { min-height: 0; padding: 11px 0 5px; border-top: 0; align-items: end; }
   .ov-prov { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 650; }
-  .ov-col { color: var(--text-muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
-  .ov-col.right, .ov-share { text-align: right; }
-  .ov-who { min-width: 0; }
-  .ov-name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ov-name .dom { color: var(--text-muted); font-weight: 400; }
-  .ov-state { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; }
-  .ov-state .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .ov-prov .muted { font-weight: 400; }
+  .ov-new { grid-column: span 2; text-align: right; }
+  .ov-new .pair { display: grid; grid-template-columns: 46px 46px; column-gap: 18px; justify-content: end; }
+  .ov-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .st { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); }
+  .st.running { background: var(--good); animation: live 1.6s ease-in-out infinite; }
+  .st.warning { background: var(--warning); }
+  .st.critical { background: var(--critical); }
+  .st.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-muted); }
+  .ov-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ov-state { flex: 0 1 auto; min-width: 0; margin-left: auto; color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ov-state.running { color: var(--text-secondary); }
   .ov-state.warning { color: var(--warning); }
   .ov-state.critical { color: var(--critical); }
-  .ov-cell { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "v r" "bar bar"; align-items: baseline; gap: 5px 8px; min-width: 0; }
-  .ov-cell .v { grid-area: v; font-size: 13.5px; font-weight: 600; }
-  .ov-cell .r { grid-area: r; text-align: right; color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; }
-  .ov-cell .meter { grid-area: bar; height: 6px; margin: 0; }
+  .ov-cell { display: grid; grid-template-columns: 34px minmax(20px, 1fr) 46px; grid-template-areas: "v bar r"; column-gap: 8px; align-items: center; min-width: 0; }
+  .ov-cell .v { grid-area: v; text-align: right; font-size: 13px; font-weight: 600; }
+  .ov-cell .meter { grid-area: bar; height: 5px; margin: 0; }
   .ov-cell .meter .pace { top: -2px; bottom: -2px; }
+  .ov-cell .r { grid-area: r; color: var(--text-muted); font-size: 11.5px; white-space: nowrap; }
+  .ov-cell .r .brief { display: none; }
   .ov-cell.high .v { color: var(--warning); }
   .ov-cell.full .v { color: var(--critical); }
   .ov-cell.none .v { color: var(--text-muted); font-weight: 400; }
-  .ov-share { font-family: var(--font-data); font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 600; letter-spacing: -0.02em; }
-  .ov-share.none { color: var(--text-muted); font-weight: 400; }
+  .ov-share { text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; letter-spacing: -0.02em; cursor: default; }
+  .ov-share.none, .ov-share.zero, .ov-share.learning { color: var(--text-muted); font-weight: 400; }
+  .ov-share.guess { color: var(--text-secondary); font-style: italic; }
   .ov-row.off .ov-name, .ov-row.off .ov-cell, .ov-row.off .ov-share { opacity: 0.45; }
 
-  .ov-time { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--border); }
-  .ov-time-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 14px; color: var(--text-muted); font-size: 12px; }
-  .keys { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; }
-  .keys .key { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
-  .keys .dot { width: 8px; height: 8px; }
-  .tl { display: flex; align-items: stretch; gap: 3px; height: 48px; margin-top: 8px; border-bottom: 1px solid var(--border-strong); }
-  .tl-slot { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column-reverse; justify-content: flex-start; gap: 2px; cursor: default; }
-  .tl-seg { flex: 0 0 auto; background: var(--prov); border-radius: 2px; }
-  .tl-seg.zero { height: 2px; background: var(--border-strong); border-radius: 1px; }
-  .tl-axis { display: flex; justify-content: space-between; margin-top: 4px; color: var(--text-muted); font-size: 11px; font-family: var(--font-data); }
-
-  /* consumption: chart and forecast */
-  .usage { margin-top: 12px; padding: 16px 18px 14px; }
-  .usage-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  /* consumption: figures and chart */
+  .usage { margin-top: 12px; padding: 14px 18px 12px; }
+  .usage-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .seg { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: 9px; background: var(--inset); }
   .seg button { height: 26px; padding: 0 11px; border: 0; border-radius: 7px; background: transparent; color: var(--text-secondary); font-size: 12.5px; cursor: pointer; white-space: nowrap; }
   .seg button:hover { color: var(--text-primary); }
   .seg button[aria-pressed="true"] { background: var(--hover); color: var(--text-primary); font-weight: 600; }
+  .ov-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 10px; background: var(--inset); border: 1px solid var(--border); border-radius: 10px; }
+  .ov-stat { min-width: 0; padding: 6px 12px 7px; border-left: 1px solid var(--border); }
+  .ov-stat:first-child { border-left: 0; }
+  .ov-stat .vs { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .ov-stat .v { font-variant-numeric: tabular-nums; font-size: 17px; line-height: 1.25; font-weight: 650; letter-spacing: -0.02em; }
+  .ov-stat .s { min-width: 0; color: var(--text-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
+  .keys { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; }
+  .keys .key { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+  .keys .dot { width: 8px; height: 8px; }
+  .tl-seg { flex: 0 0 auto; background: var(--prov); border-radius: 2px; }
+  .tl-seg.zero { height: 2px; background: var(--border-strong); border-radius: 1px; }
   .uc-empty { margin-top: 10px; color: var(--text-muted); font-size: 13px; }
-  .uc-wrap { margin-top: 16px; }
+  .uc-wrap { margin-top: 14px; }
   .uc { position: relative; display: flex; align-items: stretch; gap: 2px; height: 140px; border-bottom: 1px solid var(--border-strong); }
   .uc.dense { gap: 1px; }
   .uc-grid { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--border); pointer-events: none; }
@@ -196,26 +218,27 @@
   .uc-note { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 14px; margin-top: 8px; color: var(--text-muted); font-size: 12px; }
   .dot.faint { background: var(--text-secondary); opacity: 0.45; }
   .dot.round { width: 6px; height: 6px; border-radius: 50%; background: var(--text-primary); }
-  .fc { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
-  .fc-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; color: var(--text-secondary); font-size: 13px; }
-  .fc-head h3 { margin: 0 4px 0 0; color: var(--text-primary); font-size: 13.5px; font-weight: 650; }
-  .fc-head select { height: 28px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--raised); color: var(--text-primary); font: inherit; font-size: 12.5px; }
-  .fc-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.8fr) minmax(0, 1.7fr) minmax(0, 0.9fr); gap: 4px 18px; align-items: start; padding: 10px 0; border-top: 1px solid var(--border); }
-  .fc-head + .fc-row { margin-top: 10px; }
-  .fc-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13.5px; font-weight: 600; }
-  .fc-name .secondary { font-weight: 400; }
-  .fc-main { font-size: 13.5px; }
-  .fc-main strong { font-family: var(--font-data); letter-spacing: -0.02em; }
-  .fc-sub { color: var(--text-muted); font-size: 12px; }
-  .fc-verdict { display: flex; align-items: flex-start; gap: 8px; }
-  .fc-verdict .ico { margin-top: 3px; }
-  .fc-verdict.warning .ico { color: var(--warning); }
-  .fc-verdict.off .ico { color: var(--text-muted); }
-  .fc-need { text-align: right; }
+
+  /* activity: what the hub is doing right now, per model */
+  .activity { margin-top: 28px; padding: 14px 18px 8px; }
+  .now-stats { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-top: 8px; color: var(--text-secondary); font-size: 13px; }
+  .mini { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; cursor: default; }
+  .mini strong { font-family: var(--font-data); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; color: var(--text-primary); font-weight: 600; }
+  .mini.bad, .mini.bad strong { color: var(--critical); }
+  .mdl { margin-top: 10px; }
+  .mdl-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr) 76px 76px; column-gap: 18px; align-items: center; min-height: 28px; padding: 3px 0; border-top: 1px solid var(--border); font-size: 13px; }
+  .mdl-row.head { min-height: 0; padding: 0 0 5px; border-top: 0; }
+  .mdl-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 600; }
+  .mdl-name .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mdl-share { display: grid; grid-template-columns: minmax(0, 1fr) 38px; column-gap: 8px; align-items: center; }
+  .mdl-share .meter { height: 5px; margin: 0; }
+  .mdl-num { text-align: right; }
+  .mdl-row .mono { font-size: 13px; font-weight: 600; }
+  .mdl-row .mono.none { color: var(--text-muted); font-weight: 400; }
 
   /* tiles: one strip, divided by hairlines */
   .tiles {
-    display: grid; grid-template-columns: 1fr 1fr 1.7fr 1fr 1fr; gap: 1px; margin-top: 12px; overflow: hidden;
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1.7fr; gap: 1px; margin-top: 12px; overflow: hidden;
     background: var(--border); border: 1px solid var(--border); border-radius: var(--radius);
   }
   .tile { background: var(--surface); padding: 14px 16px; min-width: 0; }
@@ -225,43 +248,51 @@
   .tile .value.text { font-size: 17px; letter-spacing: -0.01em; padding: 6px 0 4px; }
   .tile .sub { color: var(--text-muted); font-size: 12.5px; margin-top: 3px; overflow-wrap: anywhere; }
 
-  /* account groups and cards */
+  /* account groups and cards: where an account is switched, weighted and reset */
   .group-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin: 28px 0 10px; }
   .group-head h2 { display: flex; align-items: center; gap: 9px; }
   .count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--raised); border: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; font-weight: 600; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 12px; }
-  .card { padding: 16px 18px 18px; min-width: 0; display: flex; flex-direction: column; }
-  .card-head { display: flex; align-items: center; gap: 10px; min-height: 26px; }
-  .card-head .name { font-weight: 650; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 12px; }
+  .card { padding: 13px 16px 12px; min-width: 0; display: flex; flex-direction: column; }
+  .card-head { display: flex; align-items: center; gap: 10px; min-height: 24px; }
+  .card-head .name { font-weight: 650; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: auto; }
   .head-right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
-  .windows { flex: 1 1 auto; }
-  .window { margin-top: 16px; }
-  .window.muted { font-size: 13px; }
-  .window-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 13px; }
-  .window-top .wname { font-weight: 600; }
-  .window-top .num strong { font-family: var(--font-data); letter-spacing: -0.02em; }
+  .windows { flex: 1 1 auto; margin-top: 8px; }
+  .wrow { display: grid; grid-template-columns: 52px minmax(0, 1fr) 38px 80px; column-gap: 10px; align-items: center; min-height: 24px; font-size: 13px; cursor: default; }
+  .wrow .wname { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wrow .meter { height: 6px; margin: 0; }
+  .wrow .wv { text-align: right; font-weight: 600; }
+  .wrow.high .wv { color: var(--warning); }
+  .wrow.full .wv { color: var(--critical); }
+  .wrow .wr { color: var(--text-muted); font-size: 12px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .window.muted { margin-top: 4px; font-size: 13px; }
+  .window-sub { margin-top: 4px; color: var(--text-muted); font-size: 12px; }
   .meter { position: relative; height: 8px; border-radius: 4px; margin: 7px 0 6px; background: var(--raised); background: color-mix(in srgb, var(--prov) 17%, var(--raised)); }
   .meter .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--prov); min-width: 0; }
   .meter .pace { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text-primary); border-radius: 1px; box-shadow: 0 0 0 2px var(--surface); }
-  .window-sub { color: var(--text-muted); font-size: 12.5px; }
-  .card-foot {
-    margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px 14px;
-  }
-  .foot-text { min-width: 0; font-size: 13px; }
-  .foot-weight { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
-  .stepper { display: inline-flex; align-items: stretch; height: 30px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--raised); overflow: hidden; }
-  .stepper button { width: 30px; padding: 0; border: 0; background: transparent; cursor: pointer; font-size: 16px; line-height: 1; color: var(--text-secondary); }
+  .card-foot { display: grid; row-gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .foot-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; font-size: 13px; }
+  .shares { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; min-width: 0; }
+  .shares .cap { flex: 0 0 100%; }
+  .share { white-space: nowrap; color: var(--text-secondary); cursor: default; }
+  .share strong { font-family: var(--font-data); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; color: var(--text-primary); font-weight: 600; }
+  .share.zero strong, .share.learning strong { color: var(--text-muted); font-weight: 400; }
+  .share.guess strong { font-style: italic; }
+  .weight { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; color: var(--text-secondary); }
+  .stepper { display: inline-flex; align-items: stretch; height: 28px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--raised); overflow: hidden; }
+  .stepper button { width: 28px; padding: 0; border: 0; background: transparent; cursor: pointer; font-size: 16px; line-height: 1; color: var(--text-secondary); }
   .stepper button:hover { background: var(--hover); color: var(--text-primary); }
   .stepper input {
-    width: 38px; padding: 0; border: 0; border-left: 1px solid var(--border-strong); border-right: 1px solid var(--border-strong);
+    width: 36px; padding: 0; border: 0; border-left: 1px solid var(--border-strong); border-right: 1px solid var(--border-strong);
     background: var(--inset); text-align: center; font-family: var(--font-data); font-weight: 600; font-variant-numeric: tabular-nums; -moz-appearance: textfield;
   }
   .stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-  .spark { display: flex; align-items: flex-end; gap: 2px; height: 36px; }
-  .spark .bar { width: 6px; border-radius: 2px 2px 0 0; background: var(--prov); }
+  .foot-text { min-width: 0; color: var(--text-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+  .foot-text strong { color: var(--text-secondary); font-weight: 600; }
+  .spark { display: flex; align-items: flex-end; gap: 2px; flex: 0 0 auto; height: 20px; }
+  .spark .bar { width: 5px; border-radius: 2px 2px 0 0; background: var(--prov); }
   .spark .bar.zero { height: 2px; background: var(--border-strong); border-radius: 1px; }
-  .spark .slot { display: flex; align-items: flex-end; height: 36px; padding: 0; cursor: default; }
+  .spark .slot { display: flex; align-items: flex-end; height: 20px; padding: 0; cursor: default; }
   .switch {
     position: relative; flex: 0 0 auto; width: 40px; height: 24px; padding: 0; border-radius: 999px; cursor: pointer;
     border: 1px solid var(--border-strong); background: var(--raised);
@@ -275,7 +306,7 @@
   .switch:disabled { opacity: 0.5; cursor: progress; }
   .card.off .windows, .card.off .card-foot { opacity: 0.45; }
 
-  .resets { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+  .resets { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
   .resets-label { color: var(--text-secondary); font-size: 13px; font-weight: 600; margin-right: 2px; }
   .reset-btn {
     display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 12px; border-radius: 9px; cursor: pointer;
@@ -301,7 +332,6 @@
   .legend { --prov: var(--text-secondary); color: var(--text-muted); font-size: 12.5px; margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; }
   .legend span.item { display: inline-flex; align-items: center; gap: 8px; }
   .legend .tick { flex: 0 0 auto; display: inline-block; width: 2px; height: 13px; background: var(--text-primary); border-radius: 1px; }
-  .legend .chip { height: 20px; font-size: 11.5px; padding: 0 8px; color: var(--text-primary); }
 
   /* recent requests */
   .section-head { display: flex; align-items: baseline; gap: 10px; margin: 28px 0 10px; }
@@ -330,32 +360,46 @@
   }
   [hidden] { display: none !important; }
 
-  @media (min-width: 601px) and (max-width: 1000px) {
-    .tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-    .tile { grid-column: span 2; }
-    .tile:nth-child(n+4) { grid-column: span 3; }
+  @media (max-width: 1000px) {
+    .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .tile.wide { grid-column: 1 / -1; }
+  }
+  @media (max-width: 900px) {
+    .ov-row { column-gap: 14px; min-height: 0; padding: 5px 0; }
+    .ov-new .pair { column-gap: 14px; }
+    .ov-cell { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "v r" "bar bar"; gap: 3px 6px; align-items: baseline; }
+    .ov-cell .v { text-align: left; }
+    .ov-cell .r { text-align: right; }
+    .ov-cell .meter { height: 4px; }
   }
   @media (max-width: 600px) {
     main { padding-block: 12px 40px; }
-    .overview { margin-top: 12px; padding: 14px 14px 12px; }
-    .ov-stat { padding: 8px 9px; }
-    .ov-stat .k { font-size: 10px; letter-spacing: 0.04em; }
-    .ov-stat .v { font-size: 20px; }
-    .ov-stat .s { font-size: 11px; }
-    .ov-row { grid-template-columns: minmax(0, 1fr) repeat(3, 54px) 36px; column-gap: 8px; }
-    .ov-name .dom { display: none; }
-    .ov-cell { grid-template-columns: minmax(0, 1fr); grid-template-areas: "v" "bar" "r"; gap: 3px; }
-    .ov-cell .r { text-align: left; font-size: 10.5px; }
-    .usage { padding: 14px 14px 12px; }
-    .fc-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-    .fc-verdict { grid-column: 1 / -1; grid-row: 2; }
-    .fc-need { grid-column: 1 / -1; grid-row: 3; text-align: left; display: flex; gap: 8px; align-items: baseline; }
-    .fc-pace { text-align: right; }
-    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .tile { padding: 12px 14px; }
-    .tile.wide { grid-column: 1 / -1; }
-    .tile .value { font-size: 22px; }
-    .card { padding: 14px 14px 16px; }
+    .overview { margin-top: 12px; padding: 12px 12px 6px; }
+    .cap { font-size: 9.5px; letter-spacing: 0.03em; }
+    .rw-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name when" "track track" "sub sub"; row-gap: 5px; }
+    .rw-when { display: flex; flex-direction: row-reverse; align-items: baseline; gap: 8px; }
+    .rw-sub { white-space: normal; }
+    .rw-row.rw-axis { grid-template-areas: "ticks ticks"; }
+    .rw-ticks { margin-top: -3px; }
+    .ov-row { grid-template-columns: minmax(0, 1fr) repeat(3, 48px) 30px 30px; column-gap: 7px; min-height: 0; padding: 5px 0; }
+    .ov-new .pair { grid-template-columns: 30px 30px; column-gap: 7px; }
+    .ov-state { display: none; }
+    .ov-cell { column-gap: 2px; }
+    .ov-cell .v { font-size: 12px; }
+    .ov-cell .r { font-size: 10px; }
+    .ov-cell .r .long { display: none; }
+    .ov-cell .r .brief { display: inline; }
+    .ov-share { font-size: 12px; }
+    .usage { padding: 12px 12px 10px; }
+    .ov-stat { padding: 6px 8px; }
+    .ov-stat .vs { flex-direction: column; gap: 0; }
+    .ov-stat .v { font-size: 16px; }
+    .tile { padding: 10px 12px; }
+    .tile .value { font-size: 20px; }
+    .card { padding: 12px 14px; }
+    .activity { padding: 12px 12px 6px; }
+    .mdl-row { grid-template-columns: minmax(0, 1fr) 104px 48px; column-gap: 10px; }
+    .mdl-row .req { display: none; }
   }
 </style>
 </head>
@@ -395,10 +439,14 @@
     <div id="tiles" class="tiles"></div>
     <div id="accounts"></div>
     <div class="legend">
-      <span class="item"><span class="chip num">85%</span>Share of new sessions this account gets</span>
       <span class="item"><span class="tick"></span>How much of the window's time has passed; a bar well short of it means quota will expire unused</span>
+      <span class="item">New sessions: the share of new sessions an account gets, for Fable and for the other models</span>
       <span class="item"><span id="resets-status"></span><button type="button" id="check-resets" class="linkish">Check resets</button></span>
     </div>
+    <section class="panel activity" aria-labelledby="now-title">
+      <div class="panel-head"><h2 id="now-title">Activity</h2><span class="muted small">last 5 minutes</span></div>
+      <div id="now"></div>
+    </section>
     <div class="section-head"><h2>Recent requests</h2><span class="muted small">latest 40</span></div>
     <div id="activity" class="table-wrap"></div>
     <footer class="foot">
@@ -564,12 +612,6 @@ function nextUp(accounts) {
 // weight x urgency squared x headroom, and each account's share of new sessions.
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 const weightOf = (account) => (typeof account.weight === "number" ? account.weight : 1);
-// True when the hub has seen the Fable allowance with a Fable response on one of the
-// accounts; only then does it apply the allowance to Fable sessions.
-function fableKnownToHub(accounts) {
-  return accounts.some((account) => Object.values(account.model_quotas || {}).some((reading) => reading && reading.signals &&
-    Object.keys(reading.signals).some((name) => name.toLowerCase() === "anthropic-ratelimit-unified-7d_oi-utilization")));
-}
 // With fable set, the shares are those of new Fable sessions: urgency is then that of the
 // Fable weekly allowance, scaled down when the week itself would run out early, as in the hub.
 function smartShares(accounts, fable) {
@@ -593,9 +635,13 @@ function smartShares(accounts, fable) {
       const allowance = fable && !entry.learning ? modelWindowsOf(account)[0] : null;
       if (allowance && allowance.resetAt > now) {
         entry.urgency = (1 - clamp(allowance.used, 0, 100) / 100) / clamp((allowance.resetAt - now) / (allowance.minutes * 60000), 0.02, 1) * Math.min(1, entry.urgency);
+      } else if (fable && !entry.learning && account.provider === "claude") {
+        entry.guess = true; // no current reading of the allowance: the hub goes by the account's own limits
       }
+      // A Fable request the provider refused pauses the account for Fable alone.
+      entry.paused = Boolean(fable) && (account.cooldowns || []).some((c) => c.scope === "model" && /fable/i.test(c.model_key || "") && Date.parse(c.retry_at) > now);
     }
-    entry.score = Math.max(0, weight) * entry.urgency * entry.urgency * entry.headroom;
+    entry.score = entry.paused ? 0 : Math.max(0, weight) * entry.urgency * entry.urgency * entry.headroom;
     total += entry.score;
     out[account.id] = entry;
   }
@@ -616,7 +662,9 @@ function fmtWhen(ms) {
   const date = new Date(ms);
   const sameDay = date.toDateString() === new Date().toDateString();
   const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  return sameDay ? "today " + time : date.toLocaleDateString([], { weekday: "short" }) + " " + time;
+  // A weekday alone is ambiguous from about a week away.
+  const far = Math.abs(ms - Date.now()) > 6 * 86400000;
+  return sameDay ? "today " + time : date.toLocaleDateString([], far ? { weekday: "short", day: "numeric" } : { weekday: "short" }) + " " + time;
 }
 function fmtAgo(ms) {
   const seconds = Math.max(0, Math.round((Date.now() - ms) / 1000));
@@ -634,31 +682,30 @@ function statusPill(account) {
   if (account.unavailable || (account.status && account.status !== "active")) return '<span class="pill critical"><span class="ico">&#10005;</span>' + esc(account.status_message || account.status || "Unavailable") + "</span>";
   return ""; // in use: the switch already says so
 }
-function shareChip(mine) {
+// One share of new sessions for display; what names the sessions it is about.
+function sharePart(mine, what) {
   const value = mine.share * 100;
-  const text = value > 0 && value < 1 ? "<1%" : Math.round(value) + "%";
-  const tip = mine.learning
-    ? "Share of new sessions. Its limits are not known yet: it gets the next new session so the hub can read them, and a neutral share until then."
-    : "Share of new sessions. Score " + fmtFactor(mine.score) + " = weight " + fmtFactor(mine.weight) + " × weekly urgency " + fmtFactor(mine.urgency) + "² × 5-hour headroom " + fmtFactor(mine.headroom) + ". Urgency is quota left divided by time left: above 1, quota would expire unused.";
-  return '<span class="chip num' + (mine.learning ? " learning" : "") + '" data-tip="' + esc(tip) + '">' + esc(text) + "</span>";
+  let tip;
+  if (mine.learning) tip = "Share of new " + what + ". Its limits are not known yet: it gets the next new session so the hub can read them, and a neutral share until then.";
+  else if (mine.paused) tip = "No new " + what + " for now: the provider refused the last one, and the hub waits before it tries this account again.";
+  else tip = "Share of new " + what + ". Score " + fmtFactor(mine.score) + " = weight " + fmtFactor(mine.weight) + " × urgency " + fmtFactor(mine.urgency) + "² × 5-hour headroom " + fmtFactor(mine.headroom) + ". Urgency is quota left divided by time left: above 1, quota would expire unused." +
+    (mine.guess ? " The hub has no current reading of this account's Fable allowance, so it goes by the weekly limit until the account's next Fable response." : "");
+  return { text: value > 0 && value < 1 ? "<1%" : Math.round(value) + "%", tip, cls: (mine.learning ? " learning" : "") + (value > 0 ? "" : " zero") + (mine.guess ? " guess" : "") };
 }
+// One limit as one line: name, bar with the pace tick, share used, when it resets.
 function renderWindow(w) {
   const now = Date.now();
   const stale = w.resetAt && w.resetAt <= now;
-  const used = stale || w.used === null ? null : Math.min(100, Math.max(0, w.used));
-  const lengthMs = w.minutes * 60000;
-  const elapsed = w.resetAt && !stale ? Math.min(100, Math.max(0, (1 - (w.resetAt - now) / lengthMs) * 100)) : null;
-  const right = used === null ? '<span class="muted">no reading</span>' : '<span class="num"><strong>' + pct(used) + "</strong> used</span>";
-  let sub;
-  if (stale) sub = "Reset since the last reading; the next request refreshes it.";
-  else if (w.resetAt) sub = "Resets in " + fmtDuration(w.resetAt - now) + " &middot; " + esc(fmtWhen(w.resetAt)) + (used === null ? "" : " &middot; " + pct(100 - used) + " left");
-  else sub = "No reset time reported.";
-  const tip = used === null ? "" : pct(used) + " used" + (elapsed === null ? "" : ", " + pct(elapsed) + " of the window's time has passed") + (w.at ? ". Read " + fmtAgo(w.at) + "." : "");
-  return '<div class="window"><div class="window-top"><span class="wname">' + esc(w.label || windowLabel(w.minutes)) + "</span>" + right + "</div>" +
-    '<div class="meter" data-tip="' + esc(tip) + '">' +
+  const used = stale || w.used === null ? null : clamp(w.used, 0, 100);
+  const elapsed = w.resetAt && !stale ? clamp((1 - (w.resetAt - now) / (w.minutes * 60000)) * 100, 0, 100) : null;
+  const tip = stale ? "Reset since the last reading; the next request refreshes it."
+    : (used === null ? "No reading" : pct(used) + " used, " + pct(100 - used) + " left") +
+      (w.resetAt ? ". Resets in " + fmtDuration(w.resetAt - now) + " (" + fmtWhen(w.resetAt) + ")" : ". No reset time reported") +
+      (elapsed === null ? "" : ". " + Math.round(elapsed) + "% of the window's time has passed") + (w.at ? ". Read " + fmtAgo(w.at) : "") + ".";
+  return '<div class="wrow' + (used === null ? "" : used >= 100 ? " full" : used >= 90 ? " high" : "") + '" data-tip="' + esc(tip) + '"><span class="wname">' + esc((w.label || windowLabel(w.minutes)).replace(/ weekly$/, "")) + '</span><div class="meter">' +
     (used === null ? "" : '<div class="fill" style="width:' + used + '%"></div>') +
     (elapsed === null ? "" : '<div class="pace" style="left:calc(' + elapsed + '% - 1px)"></div>') +
-    '</div><div class="window-sub">' + sub + "</div>" + (w.note ? '<div class="window-sub">' + w.note + "</div>" : "") + "</div>";
+    '</div><span class="wv mono">' + (used === null ? "&ndash;" : Math.round(used) + "%") + '</span><span class="wr num">' + (stale ? "reset" : w.resetAt ? esc(fmtWhen(w.resetAt)) : "") + "</span></div>";
 }
 function renderSpark(account) {
   const buckets = account.recent_requests || [];
@@ -667,11 +714,11 @@ function renderSpark(account) {
   const bars = buckets.map((b) => {
     const n = (b.success || 0) + (b.failed || 0);
     total += n; failed += b.failed || 0;
-    const tip = b.time + " \u00b7 " + n + (n === 1 ? " request" : " requests") + (b.failed ? ", " + b.failed + " failed" : "");
-    const bar = n === 0 ? '<span class="bar zero"></span>' : '<span class="bar" style="height:' + Math.max(4, Math.round((n / max) * 34)) + 'px"></span>';
+    const tip = b.time + " · " + n + (n === 1 ? " request" : " requests") + (b.failed ? ", " + b.failed + " failed" : "");
+    const bar = n === 0 ? '<span class="bar zero"></span>' : '<span class="bar" style="height:' + Math.max(3, Math.round((n / max) * 20)) + 'px"></span>';
     return '<span class="slot" data-tip="' + esc(tip) + '">' + bar + "</span>";
   }).join("");
-  const span = buckets.length ? buckets[0].time.split("-")[0] + "\u2013" + buckets[buckets.length - 1].time.split("-")[1] : "";
+  const span = buckets.length ? buckets[0].time.split("-")[0] + "–" + buckets[buckets.length - 1].time.split("-")[1] : "";
   return { html: '<div class="spark" role="img" aria-label="' + esc(total + " requests between " + span + ", " + failed + " failed") + '">' + bars + "</div>", total, failed, span };
 }
 function renderCard(account, next, shares, fableShares) {
@@ -680,30 +727,35 @@ function renderCard(account, next, shares, fableShares) {
   const spark = renderSpark(account);
   const observed = account.quota && account.quota.observed_at ? Date.parse(account.quota.observed_at) : 0;
   let nextPill = "";
-  let weightField = "";
+  let routing = "";
   const id = esc(account.id);
   if (shares) {
-    if (shares[account.id]) nextPill = shareChip(shares[account.id]);
-    weightField = '<div class="foot-weight"><span class="secondary">Weight <span class="muted">&middot; multiplies the share</span></span>' +
-      '<span class="stepper" data-tip="2 gives this account twice the share of new sessions; 0 gives it none while running sessions continue.">' +
+    const mine = shares[account.id];
+    const fable = fableShares && fableShares[account.id];
+    const share = (entry, what, label) => {
+      const part = sharePart(entry, what);
+      return '<span class="share' + part.cls + '" data-tip="' + esc(part.tip) + '"><strong>' + esc(part.text) + "</strong>" + (label ? " " + esc(label) : "") + "</span>";
+    };
+    routing = '<div class="foot-row"><div class="shares"><span class="cap">New sessions</span>' +
+      (mine ? share(mine, fable ? "sessions of the other models" : "sessions", fable ? "other" : "") + (fable ? share(fable, "Fable sessions", "Fable") : "") : '<span class="share zero" data-tip="This account gets no new sessions right now."><strong>&ndash;</strong></span>') +
+      '</div><span class="weight">Weight<span class="stepper" data-tip="Multiplies the share: 2 gives this account twice the share of new sessions; 0 gives it none while running sessions continue.">' +
       '<button type="button" data-weight-step="-1" data-account="' + id + '" aria-label="Decrease weight">&minus;</button>' +
       '<input type="number" min="0" max="10" step="1" inputmode="numeric" aria-label="Weight" value="' + esc(weightOf(account)) + '" data-weight-for="' + id + '">' +
-      '<button type="button" data-weight-step="1" data-account="' + id + '" aria-label="Increase weight">+</button></span></div>';
+      '<button type="button" data-weight-step="1" data-account="' + id + '" aria-label="Increase weight">+</button></span></span></div>';
   } else if (next && next.id === account.id) {
     nextPill = '<span class="chip" data-tip="' + esc(next.learning ? "Gets the next new session so the hub can read its limits." : "New sessions go to this account: its longest window resets first.") + '">Next up</span>';
   }
   const body = windows.length
-    ? windows.concat(shown.scoped.map((w) => (fableShares && fableShares[account.id] && /^Fable/.test(w.label || "")
-        ? Object.assign({}, w, { note: 'Gets <strong class="num">' + Math.round(fableShares[account.id].share * 100) + "%</strong> of new Fable sessions" }) : w))).map(renderWindow).join("") + (shown.loadedAt ? '<div class="window-sub loaded-note">Read from the provider ' + esc(fmtAgo(shown.loadedAt)) + ". The hub reads the limits itself with the account's next request.</div>" : "")
+    ? windows.concat(shown.scoped).map(renderWindow).join("") + (shown.loadedAt ? '<div class="window-sub">Read from the provider ' + esc(fmtAgo(shown.loadedAt)) + ". The hub reads the limits itself with the account's next request.</div>" : "")
     : '<div class="window muted">' + (shown.loadedAt ? "The provider reports no open limit window for this account." : "No limits read yet. They appear after this account's first request.") +
       '<div><button type="button" class="btn small" data-load-limits="' + esc(account.id) + '">Load limits</button></div></div>';
   const off = isOff(account);
   const toggle = '<button type="button" class="switch" role="switch" aria-checked="' + !off + '" data-account="' + id + '" data-off="' + off + '" aria-label="' + esc("Use " + (account.email || account.name) + " for requests") + '" data-tip="' +
     esc(off ? "Off: the hub does not use this account. Click to turn it on." : "On: the hub uses this account. Click to turn it off; running sessions move to another account.") + '"><span class="knob"></span></button>';
+  const footTip = (account.success || 0) + " succeeded and " + (account.failed || 0) + " failed since the hub started. " + (observed ? "Limits read " + fmtAgo(observed) + "." : shown.loadedAt ? "Limits loaded " + fmtAgo(shown.loadedAt) + "." : "Limits not read yet.");
   return '<article class="card' + (off ? " off" : "") + '"><div class="card-head"><span class="name">' + esc(account.email || account.label || account.name) + '</span><span class="head-right">' + nextPill + statusPill(account) + toggle + "</span></div>" +
     '<div class="windows">' + body + "</div>" + renderResets(account) +
-    '<div class="card-foot"><div class="foot-text" data-tip="' + esc((account.success || 0) + " succeeded and " + (account.failed || 0) + " failed since the hub started") + '"><div class="num"><strong>' + spark.total + "</strong> " + (spark.total === 1 ? "request" : "requests") + ' <span class="muted">' + esc(spark.span) + "</span>" + (spark.failed ? " &middot; " + spark.failed + " failed" : "") + "</div>" +
-    '<div class="muted small">' + (observed ? "Limits read " + esc(fmtAgo(observed)) : shown.loadedAt ? "Limits loaded " + esc(fmtAgo(shown.loadedAt)) : "Limits not read yet") + "</div></div>" + spark.html + weightField + "</div></article>";
+    '<div class="card-foot">' + routing + '<div class="foot-row"><div class="foot-text num" data-tip="' + esc(footTip) + '"><strong>' + spark.total + "</strong> " + (spark.total === 1 ? "request" : "requests") + (spark.span ? " &middot; " + esc(spark.span) : "") + (spark.failed ? " &middot; " + spark.failed + " failed" : "") + "</div>" + spark.html + "</div></div></article>";
 }
 // Accounts by provider, Claude first.
 function groupAccounts(accounts) {
@@ -715,7 +767,7 @@ function renderAccounts(accounts) {
   $("accounts").innerHTML = groupAccounts(accounts).map(([provider, list]) => {
     const smart = lastData && lastData.config && lastData.config.routing && lastData.config.routing.strategy === "smart-round-robin";
     const shares = smart ? smartShares(list) : null;
-    const fableShares = smart && fableKnownToHub(list) ? smartShares(list, true) : null;
+    const fableShares = smart && list.some((a) => shownWindows(a).scoped.length) ? smartShares(list, true) : null;
     const next = smart ? null : nextUp(list);
     const now = Date.now();
     const weekly = list.map((a) => shownWindows(a).windows.slice(-1)[0]).filter((w) => w && w.used !== null && w.resetAt > now);
@@ -727,8 +779,10 @@ function renderAccounts(accounts) {
   }).join("") || '<div class="card empty" style="margin-top:18px">No accounts are signed in to the hub.</div>';
 }
 // ---------- overview ----------
-// What is running now, then one row per account with its limits side by side.
+// When each limit runs out at the current pace, then one line per account with its limits
+// and its shares of new sessions.
 const RECENT_MS = 5 * 60000;
+const RUNWAY_MS = 7 * 86400000;
 function shortWindowLabel(minutes) {
   if (minutes === 300) return "5h";
   if (minutes === 10080) return "Week";
@@ -744,6 +798,13 @@ function shortName(account) {
   const parts = nameParts(account);
   return parts.local + (parts.domain ? "@" : "");
 }
+// "4d", "13h", "45m": a duration where there is no room for more.
+function fmtBrief(ms) {
+  const minutes = Math.max(0, Math.round(ms / 60000));
+  if (minutes < 60) return minutes + "m";
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? hours + "h" : Math.round(hours / 24) + "d";
+}
 function overviewCell(w, name) {
   const now = Date.now();
   const used = !w || w.used === null || (w.resetAt && w.resetAt <= now) ? null : clamp(w.used, 0, 100);
@@ -751,99 +812,107 @@ function overviewCell(w, name) {
   const left = w.resetAt ? w.resetAt - now : null;
   const elapsed = left === null ? null : clamp((1 - left / (w.minutes * 60000)) * 100, 0, 100);
   const tip = name + ": " + pct(used) + " used" + (left === null ? "" : ", resets in " + fmtDuration(left) + " (" + fmtWhen(w.resetAt) + "). " + Math.round(elapsed) + "% of the window's time has passed.");
-  return '<div class="ov-cell' + (used >= 100 ? " full" : used >= 90 ? " high" : "") + '" data-tip="' + esc(tip) + '"><span class="v mono">' + Math.round(used) + '%</span><span class="r num">' + (left === null ? "" : esc(fmtDuration(left))) + '</span>' +
-    '<div class="meter"><div class="fill" style="width:' + used + '%"></div>' + (elapsed === null ? "" : '<div class="pace" style="left:calc(' + elapsed + '% - 1px)"></div>') + "</div></div>";
+  return '<div class="ov-cell' + (used >= 100 ? " full" : used >= 90 ? " high" : "") + '" data-tip="' + esc(tip) + '"><span class="v mono">' + Math.round(used) + "%</span>" +
+    '<div class="meter"><div class="fill" style="width:' + used + '%"></div>' + (elapsed === null ? "" : '<div class="pace" style="left:calc(' + elapsed + '% - 1px)"></div>') + "</div>" +
+    '<span class="r num">' + (left === null ? "" : '<span class="long">' + esc(fmtDuration(left)) + '</span><span class="brief">' + esc(fmtBrief(left)) + "</span>") + "</span></div>";
 }
-// [kind, text, live] for the line under an account's name.
+// [kind, text] for the mark and the note beside an account's name.
 function overviewState(account, running, last) {
   const cooldown = activeCooldown(account);
-  if (isOff(account)) return ["", "Off", false];
-  if (cooldown) return ["warning", "Paused " + fmtDuration(Date.parse(cooldown.retry_at) - Date.now()), false];
-  if (account.unavailable || (account.status && account.status !== "active")) return ["critical", account.status_message || account.status || "Unavailable", false];
-  if (running) return ["running", running + " running", true];
-  if (!last) return ["", "No requests yet", false];
+  if (isOff(account)) return ["off", "Off"];
+  if (cooldown) return ["warning", "Paused " + fmtDuration(Date.parse(cooldown.retry_at) - Date.now())];
+  if (account.unavailable || (account.status && account.status !== "active")) return ["critical", account.status_message || account.status || "Unavailable"];
+  if (running) return ["running", running + " running"];
+  if (!last) return ["", "No requests yet"];
   const ago = Date.now() - last;
-  return ["", ago < 60000 ? "Active just now" : "Idle " + fmtDuration(ago), false];
+  return ["", ago < 60000 ? "Active just now" : "Idle " + fmtDuration(ago)];
 }
-// Requests over time, stacked by provider, from the accounts' request counts.
-function renderTimeline(groups) {
-  const times = [];
-  const byTime = {};
-  for (const [provider, list] of groups) {
-    for (const account of list) {
-      for (const bucket of account.recent_requests || []) {
-        if (!byTime[bucket.time]) { byTime[bucket.time] = { total: 0, failed: 0, by: {} }; times.push(bucket.time); }
-        const n = (bucket.success || 0) + (bucket.failed || 0);
-        byTime[bucket.time].total += n;
-        byTime[bucket.time].failed += bucket.failed || 0;
-        byTime[bucket.time].by[provider] = (byTime[bucket.time].by[provider] || 0) + n;
+function shareCell(mine, what) {
+  if (!mine) return '<div class="ov-share none">&ndash;</div>';
+  const part = sharePart(mine, what);
+  return '<div class="ov-share' + part.cls + '" data-tip="' + esc(part.tip) + '">' + esc(part.text) + "</div>";
+}
+// The forecast: one line per provider and limit with the time until it runs out, and the
+// next seven days on one shared axis (in the provider's colour while quota lasts, hatched
+// red while every account is used up).
+function renderRunway(accounts, groups, now) {
+  if (!usageHistory.supported) return "";
+  const samples = usageHistory.samples;
+  if (samples.length < 2) {
+    return '<div class="rw"><div class="rw-empty">' + (usageHistory.enabled
+      ? "The forecast appears after the hub's second usage reading; it takes one every 15 minutes."
+      : "No forecast: consumption tracking is switched off (usage-history-enabled in the hub's config).") + "</div></div>";
+  }
+  const segments = currentSegments();
+  const lookback = Number(usageView.lookback) || 6;
+  const pace = (Number(usageView.pace) || 100) / 100;
+  const end = now + RUNWAY_MS;
+  const at = (ms) => clamp(((ms - now) / RUNWAY_MS) * 100, 0, 100);
+  const bar = (cls, from, to) => '<span class="' + cls + '" style="left:' + at(from).toFixed(2) + "%;width:" + (at(to) - at(from)).toFixed(2) + '%"></span>';
+  const midnights = [];
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  for (let i = 1; i <= 8; i++) {
+    const day = new Date(today); day.setDate(today.getDate() + i);
+    if (day.getTime() < end) midnights.push(day.getTime());
+  }
+  const dayLines = midnights.map((ms) => '<span class="rw-day" style="left:' + at(ms).toFixed(2) + '%"></span>').join("");
+  const rows = [];
+  for (const [provider] of groups) {
+    for (const metric of usageMetrics(segments, provider)) {
+      const f = usageForecast(segments, samples, accounts, provider, metric, lookback, pace, now);
+      if (!f.accounts) continue;
+      let kind = "good", big, when;
+      if (f.rate === null) { kind = "off"; big = "No pace yet"; when = "too few readings"; }
+      else if (!(f.rate > 0)) { big = "Not in use"; when = "nothing consumed lately"; }
+      else if (f.runOut !== null && f.runOut - now < 60000) { kind = "critical"; big = "Empty now"; when = f.refill ? "refill in " + fmtDuration(f.refill - now) : "no refill in sight"; }
+      else if (f.runOut !== null) { kind = f.runOut - now <= 86400000 ? "critical" : f.runOut < end ? "warning" : "later"; big = "in " + fmtDuration(f.runOut - now); when = fmtWhen(f.runOut); }
+      else if (f.needed > f.accounts) { big = "14+ days"; when = "then the resets fall behind"; }
+      else { big = "Enough"; when = "the resets keep up"; }
+      let track = "";
+      let trackTip = "The next 7 days at this pace.";
+      if (f.rate !== null) {
+        const gaps = f.gaps.filter(([from]) => from < end);
+        let cursor = now;
+        for (const [from, to] of gaps) {
+          if (from > cursor) track += bar("rw-ok", cursor, from);
+          track += bar("rw-out", from, Math.min(to, end));
+          cursor = Math.min(to, end);
+        }
+        if (cursor < end) track += bar("rw-ok", cursor, end);
+        trackTip += gaps.length ? " Nothing left on any account: " + gaps.slice(0, 3).map(([from, to]) => fmtWhen(from) + " to " + (to >= end ? "beyond these 7 days" : fmtWhen(to))).join("; ") + (gaps.length > 3 ? "; and " + (gaps.length - 3) + " more times" : "") + "." : " Quota lasts all the way.";
       }
+      const sub = f.rate === null ? "" :
+        '<span class="num">' + fmtPoints(f.rate) + '</span> points/h &middot; <span class="num">' + fmtPoints(f.left) + "</span> left on " + f.accounts + (f.accounts === 1 ? " account" : " accounts") +
+        (f.runOut !== null && f.refill ? " &middot; next refill " + esc(fmtWhen(f.refill)) : "") +
+        (f.rate > 0 ? ' &middot; <span class="num">' + f.needed + "</span> " + (f.needed === 1 ? "account" : "accounts") + " needed for this pace" : "");
+      rows.push('<div class="rw-row ' + kind + '" data-provider="' + esc(provider) + '"><div class="rw-name"><span class="dot"></span>' + esc(providerName(provider)) + ' <span class="secondary">' + esc(metric === "week" ? "Week" : metric.slice(6)) + "</span></div>" +
+        '<div class="rw-when"><div class="rw-big">' + esc(big) + '</div><div class="rw-at">' + esc(when) + "</div></div>" +
+        '<div class="rw-track" role="img" aria-label="' + esc(trackTip) + '" data-tip="' + esc(trackTip) + '">' + track + dayLines + "</div>" +
+        '<div class="rw-sub" data-tip="1 point is 1% of one account\'s limit. Accounts needed: how many keep this pace up without running out, counting their resets.">' + sub + "</div></div>");
     }
   }
-  if (!times.length) return "";
-  const max = Math.max(1, ...times.map((time) => byTime[time].total));
-  const slots = times.map((time) => {
-    const bucket = byTime[time];
-    const parts = groups.filter(([provider]) => bucket.by[provider] > 0);
-    const tip = time.replace("-", "\u2013") + " \u00b7 " + bucket.total + (bucket.total === 1 ? " request" : " requests") +
-      (parts.length ? " (" + parts.map(([provider]) => providerName(provider) + " " + bucket.by[provider]).join(", ") + ")" : "") + (bucket.failed ? ", " + bucket.failed + " failed" : "");
-    const segments = parts.map(([provider]) => '<span class="tl-seg" data-provider="' + esc(provider) + '" style="height:' + Math.max(2, Math.round((bucket.by[provider] / max) * 40)) + 'px"></span>').join("");
-    return '<span class="tl-slot" data-tip="' + esc(tip) + '">' + (segments || '<span class="tl-seg zero"></span>') + "</span>";
-  }).join("");
-  const keys = groups.map(([provider]) => '<span class="key" data-provider="' + esc(provider) + '"><span class="dot"></span>' + esc(providerName(provider)) + "</span>").join("");
-  const total = times.reduce((sum, time) => sum + byTime[time].total, 0);
-  return '<div class="ov-time"><div class="ov-time-head"><span><span class="num">' + total + "</span> requests over time</span>" + '<span class="keys">' + keys + "</span></div>" +
-    '<div class="tl" role="img" aria-label="' + esc(total + " requests between " + times[0].split("-")[0] + " and " + times[times.length - 1].split("-")[1]) + '">' + slots + "</div>" +
-    '<div class="tl-axis"><span>' + esc(times[0].split("-")[0]) + "</span><span>" + esc(times[times.length - 1].split("-")[1]) + "</span></div></div>";
+  const trackedHours = (now - samples[0].t * 1000) / 3600000;
+  const head = '<div class="rw-head"><span class="cap">Runs out</span><label for="usage-pace">at</label>' +
+    usageSelect("pace", [[50, "50%"], [75, "75%"], [100, "100%"], [125, "125%"], [150, "150%"], [200, "200%"]], Math.round(pace * 100), "Share of that pace") +
+    '<label for="usage-lookback">of the pace of the last</label>' +
+    usageSelect("lookback", [[1, "1 hour"], [3, "3 hours"], [6, "6 hours"], [12, "12 hours"], [24, "24 hours"], [72, "3 days"], [168, "7 days"]], lookback, "Hours the pace is taken from") +
+    (trackedHours < lookback ? "<span>&middot; only " + esc(fmtDuration(trackedHours * 3600000)) + " recorded so far</span>" : "") + "</div>";
+  if (!rows.length) return '<div class="rw">' + head + '<div class="rw-empty">No account that is switched on has a usage reading yet.</div></div>';
+  const axis = '<div class="rw-row rw-axis"><div class="rw-ticks"><span style="left:0">now</span>' +
+    midnights.filter((ms) => at(ms) > 9 && at(ms) < 95).map((ms) => '<span style="left:' + at(ms).toFixed(2) + '%">' + esc(new Date(ms).toLocaleDateString([], { weekday: "short" })) + "</span>").join("") + "</div></div>";
+  return '<div class="rw">' + head + rows.join("") + axis + "</div>";
 }
 function renderOverview(accounts, config, log) {
   const now = Date.now();
   const routing = (config && config.routing) || {};
-  // Which account a request went to is only logged with session affinity on.
-  const tracked = Boolean(routing["session-affinity"]);
-  const recent = log.rows.filter((r) => now - r.at < RECENT_MS);
-  const failed = recent.filter((r) => r.status >= 400).length;
-  const sessions = new Set(recent.map((r) => r.session).concat(log.running.map((r) => r.session)).filter(Boolean));
   const runningBy = {};
   const lastBy = {};
   for (const r of log.running) { runningBy[r.auth] = (runningBy[r.auth] || 0) + 1; lastBy[r.auth] = Math.max(lastBy[r.auth] || 0, r.at || 0); }
   for (const r of log.rows) if (r.auth) lastBy[r.auth] = Math.max(lastBy[r.auth] || 0, r.at || 0);
-  const speed = speedSummary();
-
-  // What needs a look: accounts that are out of service and limits that are nearly used up.
-  const notes = [];
-  for (const account of accounts) {
-    const who = "<strong>" + esc(shortName(account)) + "</strong> ";
-    const cooldown = activeCooldown(account);
-    if (isOff(account)) { notes.push(["off", "&#9208;", who + "off"]); continue; }
-    if (cooldown) notes.push(["warning", "&#9203;", who + "paused " + esc(fmtDuration(Date.parse(cooldown.retry_at) - now)) + (cooldown.reason ? " &middot; " + esc(cooldown.reason.replace(/_/g, " ")) : "")]);
-    else if (account.unavailable || (account.status && account.status !== "active")) notes.push(["critical", "&#10005;", who + esc(account.status_message || account.status || "unavailable")]);
-    const shown = shownWindows(account);
-    for (const w of shown.windows.concat(shown.scoped)) {
-      if (w.used === null || !(w.resetAt > now) || w.used < 90) continue;
-      const label = w.label || windowLabel(w.minutes).toLowerCase();
-      notes.push([w.used >= 100 ? "critical" : "warning", "&#9650;", who + esc(label) + (w.used >= 100 ? " used up" : " at " + Math.round(w.used) + "%") + " &middot; resets in " + esc(fmtDuration(w.resetAt - now))]);
-    }
-  }
-  const rank = { critical: 0, warning: 1, off: 2 };
-  notes.sort((a, b) => rank[a[0]] - rank[b[0]]);
-  const shownNotes = notes.slice(0, 5);
-  if (notes.length > shownNotes.length) shownNotes.push(["off", "", "+" + (notes.length - shownNotes.length) + " more below"]);
-  if (!notes.length) shownNotes.push(["good", "&#10003;", accounts.length ? "<strong>All " + accounts.length + " accounts</strong> available, none near a limit" : "No accounts are signed in"]);
-  const notesHtml = shownNotes.map(([kind, icon, html]) => '<span class="note ' + kind + '">' + (icon ? '<span class="ico">' + icon + "</span>" : "") + "<span>" + html + "</span></span>").join("");
-
-  const stat = (label, value, sub, bad, tip, live) => '<div class="ov-stat" data-tip="' + esc(tip) + '"><div class="k">' + label + (live ? '<span class="live"></span>' : "") + '</div><div class="v">' + value + '</div><div class="s' + (bad ? " bad" : "") + '">' + sub + "</div></div>";
-  const stats =
-    stat("Running", tracked ? log.running.length : "&ndash;", "now", false, tracked ? "Requests the hub is answering right now." : "Not known: the hub only logs this with session affinity on.", tracked && log.running.length > 0) +
-    stat("Sessions", tracked ? sessions.size : "&ndash;", "last 5 min", false, tracked ? "Sessions with a request in the last 5 minutes." : "Not known: the hub only logs this with session affinity on.") +
-    stat("Requests", recent.length, failed ? failed + " failed" : "last 5 min", failed > 0, "Requests finished in the last 5 minutes" + (failed ? "; " + failed + " of them failed." : "; none failed.")) +
-    stat("Tokens/s", speed ? Math.round(speed.rate) : "&ndash;", "output", false, speed ? "Output tokens per second of generation, over the " + speed.count + (speed.count === 1 ? " request" : " requests") + " finished in the last 5 minutes." : "No finished requests in the last 5 minutes.");
 
   const groups = groupAccounts(accounts);
   const smart = routing.strategy === "smart-round-robin";
   const usage = groups.map(([provider, list]) => {
-    const shares = smart ? smartShares(list) : null;
-    const next = smart ? null : nextUp(list);
     const shown = {};
     for (const account of list) shown[account.id] = shownWindows(account);
     // The columns follow the account with the most windows: its shortest and its longest.
@@ -851,32 +920,33 @@ function renderOverview(accounts, config, log) {
     const longMinutes = sample.length ? sample[sample.length - 1].minutes : 10080;
     const shortMinutes = sample.length > 1 ? sample[0].minutes : longMinutes === 300 ? 0 : 300;
     const scopedLabel = (list.map((account) => shown[account.id].scoped[0]).find(Boolean) || {}).label || "";
-    const head = '<div class="ov-row ov-group"><div class="ov-prov"><span class="dot"></span>' + esc(providerName(provider)) + '</div><div class="ov-col">' + (shortMinutes ? shortWindowLabel(shortMinutes) : "") + '</div><div class="ov-col">' + shortWindowLabel(longMinutes) + '</div><div class="ov-col">' + esc(scopedLabel.replace(/ weekly$/, "")) +
-      '</div><div class="ov-col right" data-tip="Share of new sessions this account gets">' + (smart ? "Share" : "") + "</div></div>";
+    const scopedName = scopedLabel.replace(/ weekly$/, "");
+    // New sessions of a model with a limit of its own are shared out by that limit.
+    const shares = smart ? smartShares(list) : null;
+    const scopedShares = smart && scopedName ? smartShares(list, true) : null;
+    const next = smart ? null : nextUp(list);
+    const head = '<div class="ov-row ov-group"><div class="ov-prov"><span class="dot"></span>' + esc(providerName(provider)) + ' <span class="muted num">' + list.length + '</span></div><div class="cap">' + (shortMinutes ? shortWindowLabel(shortMinutes) : "") + '</div><div class="cap">' + shortWindowLabel(longMinutes) + '</div><div class="cap">' + esc(scopedName) +
+      '</div><div class="ov-new"><div class="cap" data-tip="Share of new sessions each account gets. Running sessions stay where they are.">' + (smart ? "New sessions" : "") + "</div>" +
+      (scopedShares ? '<div class="pair cap"><span data-tip="New sessions of the models without a limit of their own, such as Opus">Other</span><span data-tip="' + esc("New " + scopedName + " sessions") + '">' + esc(scopedName) + "</span></div>" : "") + "</div></div>";
     const rows = list.map((account) => {
       const windows = shown[account.id].windows;
       const short = windows.find((w) => w.minutes === shortMinutes) || null;
       const long = windows.find((w) => w.minutes === longMinutes) || null;
       const scoped = shown[account.id].scoped[0] || null;
       const observed = account.quota && account.quota.observed_at ? Date.parse(account.quota.observed_at) : 0;
-      const [kind, text, live] = overviewState(account, runningBy[account.id] || 0, Math.max(lastBy[account.id] || 0, observed || 0));
-      const parts = nameParts(account);
-      const mine = shares && shares[account.id];
-      let share = '<div class="ov-share none">&ndash;</div>';
-      if (mine) {
-        const value = mine.share * 100;
-        share = '<div class="ov-share' + (mine.learning ? " none" : "") + '" data-tip="' + esc(mine.learning ? "Share of new sessions. Its limits are not known yet, so it gets the next new session." : "Share of new sessions") + '">' + (value > 0 && value < 1 ? "&lt;1%" : Math.round(value) + "%") + "</div>";
-      } else if (next && next.id === account.id) {
-        share = '<div class="ov-share" data-tip="New sessions go to this account.">next</div>';
-      }
-      return '<div class="ov-row' + (isOff(account) ? " off" : "") + '"><div class="ov-who"><div class="ov-name" data-tip="' + esc(account.email || account.label || account.name) + '">' + esc(parts.local) + (parts.domain ? '@<span class="dom">' + esc(parts.domain) + "</span>" : "") +
-        '</div><div class="ov-state ' + kind + '">' + (live ? '<span class="live"></span>' : "") + '<span class="t">' + esc(text) + "</span></div></div>" +
+      const [kind, text] = overviewState(account, runningBy[account.id] || 0, Math.max(lastBy[account.id] || 0, observed || 0));
+      let share;
+      if (scopedShares) share = shareCell(shares[account.id], "sessions of the other models") + shareCell(scopedShares[account.id], scopedName + " sessions");
+      else if (shares) share = "<div></div>" + shareCell(shares[account.id], "sessions");
+      else share = "<div></div>" + (next && next.id === account.id ? '<div class="ov-share" data-tip="New sessions go to this account.">next</div>' : '<div class="ov-share none">&ndash;</div>');
+      return '<div class="ov-row' + (isOff(account) ? " off" : "") + '"><div class="ov-who" data-tip="' + esc((account.email || account.label || account.name) + " · " + text) + '"><span class="st ' + kind + '"></span><span class="ov-name">' + esc(nameParts(account).local) +
+        '</span><span class="ov-state ' + kind + '">' + esc(text) + "</span></div>" +
         overviewCell(short, windowLabel(shortMinutes || 300)) + overviewCell(long, windowLabel(longMinutes)) + overviewCell(scoped, scopedLabel || "Model limit") + share + "</div>";
     }).join("");
     return '<div data-provider="' + esc(provider) + '">' + head + rows + "</div>";
   }).join("");
 
-  $("overview").innerHTML = '<div class="ov-notes">' + notesHtml + '</div><div class="ov-stats">' + stats + '</div><div class="ov-usage">' + usage + "</div>" + renderTimeline(groups);
+  $("overview").innerHTML = renderRunway(accounts, groups, now) + '<div class="ov-usage">' + usage + "</div>";
 }
 function renderTiles(accounts, config) {
   const routing = (config && config.routing) || {};
@@ -890,21 +960,15 @@ function renderTiles(accounts, config) {
   const tiles = [
     ["Accounts available", '<span class="num">' + usable + '</span> <span class="muted" style="font-size:15px;font-weight:400">of ' + accounts.length + "</span>", Object.keys(byProvider).map((p) => byProvider[p] + " " + providerName(p)).join(" · "), false],
     ["Requests " + esc(span), '<span class="num">' + total + "</span>", failed ? failed + " failed" : "none failed", false],
-    ["Routing", esc(strategy), (routing.strategy === "smart-round-robin" ? "By weight, weekly urgency and 5-hour headroom; quota that expires first is used first. Fable sessions follow the Fable allowance. " : "") + (routing["session-affinity"] ? "Sessions keep their account for " + esc(routing["session-affinity-ttl"] || "1h") + " of inactivity." : "Sessions are not kept on one account."), true],
     ["Client keys", '<span class="num">' + keys.length + "</span>", esc(keys.join(", ")), false],
+    ["Routing", esc(strategy), (routing.strategy === "smart-round-robin" ? "By weight, weekly urgency and 5-hour headroom; quota that expires first is used first. Fable sessions follow the Fable allowance. " : "") + (routing["session-affinity"] ? "Sessions keep their account for " + esc(routing["session-affinity-ttl"] || "1h") + " of inactivity." : "Sessions are not kept on one account."), true],
   ];
-  const speed = speedSummary();
-  const recording = !config || config["usage-statistics-enabled"] !== false;
-  tiles.splice(3, 0, ["Output speed",
-    speed ? '<span class="num">' + Math.round(speed.rate) + '</span> <span class="unit">tokens/s</span>' : "&ndash;",
-    speed ? "last 5 min &middot; " + speed.count + (speed.count === 1 ? " request" : " requests") : recording ? "no finished requests in the last 5 min" : "usage recording is switched off in the hub",
-    false,
-    speed ? "Output tokens divided by generation time, over the requests finished in the last 5 minutes. " + speed.models.map((m) => m.model + " " + Math.round(m.rate) + "/s").join(", ") + "." : ""]);
-  $("tiles").innerHTML = tiles.map(([label, value, sub, text, tip]) => '<div class="tile' + (text ? " wide" : "") + '"' + (tip ? ' data-tip="' + esc(tip) + '"' : "") + '><div class="label">' + label + '</div><div class="value' + (text ? " text" : "") + '">' + value + '</div><div class="sub">' + sub + "</div></div>").join("");
+  $("tiles").innerHTML = tiles.map(([label, value, sub, text]) => '<div class="tile' + (text ? " wide" : "") + '"><div class="label">' + label + '</div><div class="value' + (text ? " text" : "") + '">' + value + '</div><div class="sub">' + sub + "</div></div>").join("");
 }
 
-// ---------- output speed, from the hub's usage records ----------
-// The hub hands each usage record out once, so the page keeps the recent ones itself.
+// ---------- activity: what the hub is doing right now, per model ----------
+// Output speed comes from the hub's usage records. The hub hands each record out once, so
+// the page keeps the recent ones itself.
 const SPEED_WINDOW_MS = 5 * 60000;
 let usageRecords = [];
 async function loadUsage() {
@@ -916,25 +980,86 @@ async function loadUsage() {
     const output = record.token_breakdown && record.token_breakdown.output ? Number(record.token_breakdown.output.total_tokens) : 0;
     const seconds = (Number(record.latency_ms) - Number(record.ttft_ms)) / 1000;
     if (!(output > 0) || !(seconds > 0)) continue;
-    usageRecords.push({ at: Date.parse(record.timestamp) + Number(record.latency_ms), model: record.model || "unknown", output, seconds });
+    usageRecords.push({ at: Date.parse(record.timestamp) + Number(record.latency_ms), model: record.model || "unknown", alias: record.alias || "", output, seconds });
   }
   const cutoff = Date.now() - 3 * SPEED_WINDOW_MS;
   usageRecords = usageRecords.filter((record) => !(record.at < cutoff)).slice(-5000);
 }
-// Output tokens per second of generation over the requests that finished in the window.
+// Output tokens per second of generation over the requests that finished in the window:
+// in total, per model, and by every name a record carries (its model and its alias).
 function speedSummary() {
   const cutoff = Date.now() - SPEED_WINDOW_MS;
   const recent = usageRecords.filter((record) => record.at >= cutoff);
   if (!recent.length) return null;
   const byModel = {};
+  const byName = {};
+  const add = (map, name, record) => {
+    const entry = map[name] || (map[name] = { model: name, output: 0, seconds: 0, count: 0 });
+    entry.output += record.output; entry.seconds += record.seconds; entry.count++;
+  };
   let output = 0, seconds = 0;
   for (const record of recent) {
     output += record.output; seconds += record.seconds;
-    const entry = byModel[record.model] || (byModel[record.model] = { model: record.model, output: 0, seconds: 0 });
-    entry.output += record.output; entry.seconds += record.seconds;
+    add(byModel, record.model, record);
+    add(byName, record.model, record);
+    if (record.alias && record.alias !== record.model) add(byName, record.alias, record);
   }
-  const models = Object.values(byModel).map((entry) => ({ model: entry.model, rate: entry.output / entry.seconds })).sort((a, b) => b.rate - a.rate);
-  return { rate: output / seconds, count: recent.length, models };
+  for (const map of [byModel, byName]) for (const entry of Object.values(map)) entry.rate = entry.output / entry.seconds;
+  return { rate: output / seconds, count: recent.length, models: Object.values(byModel), byName };
+}
+// The speed of a model as the hub log names it; a usage record may carry a longer name.
+function modelSpeed(speed, name) {
+  if (!speed) return null;
+  if (speed.byName[name]) return speed.byName[name];
+  const near = Object.keys(speed.byName).find((other) => other.startsWith(name) || name.startsWith(other));
+  return near ? speed.byName[near] : null;
+}
+// Requests of the last 5 minutes (finished and still running) per model, with each model's
+// share of them and its output speed.
+function renderNow(accounts, config, log) {
+  const now = Date.now();
+  // Which account and model a request went to is only logged with session affinity on.
+  const tracked = Boolean(((config && config.routing) || {})["session-affinity"]);
+  const recent = log.rows.filter((r) => now - r.at < RECENT_MS);
+  const failed = recent.filter((r) => r.status >= 400).length;
+  const sessions = new Set(recent.map((r) => r.session).concat(log.running.map((r) => r.session)).filter(Boolean));
+  const speed = speedSummary();
+  const providerOf = {};
+  for (const account of accounts) providerOf[account.id] = account.provider;
+  const models = {};
+  const entry = (name) => models[name] || (models[name] = { model: name, requests: 0, providers: {} });
+  for (const r of recent.concat(log.running)) {
+    if (!r.model) continue;
+    const mine = entry(r.model);
+    mine.requests++;
+    if (providerOf[r.auth]) mine.providers[providerOf[r.auth]] = (mine.providers[providerOf[r.auth]] || 0) + 1;
+  }
+  // Without session affinity the log does not name the model; the usage records do.
+  if (!Object.keys(models).length && speed) for (const model of speed.models) entry(model.model).requests += model.count;
+  const list = Object.values(models).sort((a, b) => b.requests - a.requests || a.model.localeCompare(b.model));
+  const total = list.reduce((sum, model) => sum + model.requests, 0);
+
+  const mini = (value, label, tip, cls, live) => '<span class="mini' + (cls || "") + '" data-tip="' + esc(tip) + '">' + (live ? '<span class="live"></span>' : "") + "<strong>" + value + "</strong> " + label + "</span>";
+  const unknown = "Not known: the hub only logs this with session affinity on.";
+  const stats =
+    mini(tracked ? log.running.length : "&ndash;", "running", tracked ? "Requests the hub is answering right now." : unknown, "", tracked && log.running.length > 0) +
+    mini(tracked ? sessions.size : "&ndash;", sessions.size === 1 ? "session" : "sessions", tracked ? "Sessions with a request in the last 5 minutes." : unknown) +
+    mini(recent.length, recent.length === 1 ? "request finished" : "requests finished", "Requests finished in the last 5 minutes.") +
+    (failed ? mini(failed, "failed", failed + " of the finished requests failed.", " bad") : "") +
+    mini(speed ? Math.round(speed.rate) : "&ndash;", "tokens/s", speed ? "Output tokens per second of generation, over the " + speed.count + (speed.count === 1 ? " request" : " requests") + " finished in the last 5 minutes." : "No finished requests with output in the last 5 minutes.");
+
+  const rows = list.map((model) => {
+    const provider = Object.keys(model.providers).sort((a, b) => model.providers[b] - model.providers[a])[0] || (/^claude/i.test(model.model) ? "claude" : /^(gpt|o\d|codex)/i.test(model.model) ? "codex" : "");
+    const share = total > 0 ? (model.requests / total) * 100 : 0;
+    const rate = modelSpeed(speed, model.model);
+    return '<div class="mdl-row" data-provider="' + esc(provider) + '"><div class="mdl-name"><span class="dot"></span><span class="t">' + esc(model.model) + "</span></div>" +
+      '<div class="mdl-share" data-tip="' + esc(model.requests + " of " + total + " requests in the last 5 minutes, running ones included") + '"><div class="meter"><div class="fill" style="width:' + share.toFixed(1) + '%"></div></div><span class="mono mdl-num">' + Math.round(share) + "%</span></div>" +
+      '<div class="mdl-num mono req">' + model.requests + "</div>" +
+      '<div class="mdl-num mono' + (rate ? "" : " none") + '" data-tip="' + esc(rate ? "Output tokens per second of generation, over " + rate.count + (rate.count === 1 ? " finished request" : " finished requests") + "." : "No finished request with output in the last 5 minutes.") + '">' + (rate ? Math.round(rate.rate) : "&ndash;") + "</div></div>";
+  }).join("");
+  $("now").innerHTML = '<div class="now-stats">' + stats + "</div>" + (rows
+    ? '<div class="mdl"><div class="mdl-row head"><div class="cap">Model</div><div class="cap">Share of requests</div><div class="cap mdl-num req">Requests</div><div class="cap mdl-num">Tokens/s</div></div>' + rows + "</div>"
+    : '<div class="rw-empty" style="margin-top:8px">No requests in the last 5 minutes.</div>');
 }
 
 // ---------- consumption over time and forecast, from the hub's usage readings ----------
@@ -1080,13 +1205,16 @@ function usageForecast(segments, samples, accounts, provider, metric, lookbackHo
   }
   const firstMs = samples.length ? samples[0].t * 1000 : nowMs;
   const covered = Math.min(lookbackHours, (nowMs - firstMs) / 3600000);
-  const out = { accounts: pool.length, left: pool.reduce((sum, account) => sum + account.left, 0), covered, rate: null, runOut: null, refill: null, needed: null };
+  // runOut: when the demand first cannot be met. refill: the first reset after that.
+  // gaps: every stretch of the horizon without quota, as [from, to] in ms.
+  const out = { accounts: pool.length, left: pool.reduce((sum, account) => sum + account.left, 0), covered, rate: null, runOut: null, refill: null, needed: null, gaps: [] };
   if (!pool.length || !(covered >= 0.25)) return out;
   out.rate = (usageTotal(segments, metric, nowMs - covered * 3600000, nowMs, provider) / covered) * paceFactor;
   const windowHours = pool[0].lengthMs / 3600000;
   out.needed = Math.ceil((out.rate * windowHours) / 100 - 1e-9);
   if (!(out.rate > 0)) return out;
   const perStep = (out.rate * FORECAST_STEP_MS) / 3600000;
+  let gapFrom = null;
   for (let t = nowMs + FORECAST_STEP_MS; t <= nowMs + FORECAST_HORIZON_MS; t += FORECAST_STEP_MS) {
     for (const account of pool) if (account.reset && account.reset <= t) { account.left = 100; account.reset += account.lengthMs; }
     pool.sort((a, b) => (a.reset || Infinity) - (b.reset || Infinity));
@@ -1098,13 +1226,37 @@ function usageForecast(segments, samples, accounts, provider, metric, lookbackHo
       if (need <= 1e-9) break;
     }
     if (need > 1e-9) {
-      out.runOut = t;
-      const resets = pool.map((account) => account.reset).filter((reset) => reset > t);
-      out.refill = resets.length ? Math.min(...resets) : null;
-      break;
+      if (gapFrom === null) {
+        // The quota ran out part way through this step.
+        gapFrom = t - FORECAST_STEP_MS * (need / perStep);
+        if (out.runOut === null) {
+          out.runOut = gapFrom;
+          const resets = pool.map((account) => account.reset).filter((reset) => reset > t);
+          out.refill = resets.length ? Math.min(...resets) : null;
+        }
+      }
+    } else if (gapFrom !== null) {
+      out.gaps.push([gapFrom, t - FORECAST_STEP_MS]);
+      gapFrom = null;
     }
   }
+  if (gapFrom !== null) out.gaps.push([gapFrom, nowMs + FORECAST_HORIZON_MS]);
   return out;
+}
+// The readings as consumption segments; worked out again only when a reading was added.
+let segmentCache = { key: "", segments: [] };
+function currentSegments() {
+  const samples = usageHistory.samples;
+  const key = samples.length + ":" + usageHistory.latest;
+  if (segmentCache.key !== key) segmentCache = { key, segments: usageSegments(samples) };
+  return segmentCache.segments;
+}
+// The limits consumption is tracked for, the weekly one first; with a provider, only those
+// of its accounts. The 5-hour limit is left out: it refills too fast to forecast.
+function usageMetrics(segments, provider) {
+  const metrics = [];
+  for (const segment of segments) if (segment.metric !== "short" && (!provider || segment.provider === provider) && !metrics.includes(segment.metric)) metrics.push(segment.metric);
+  return metrics.sort((a, b) => (a === "week" ? -1 : b === "week" ? 1 : a.localeCompare(b)));
 }
 
 const fmtPoints = (value) => (value >= 100 ? String(Math.round(value)) : String(Math.round(value * 10) / 10));
@@ -1140,10 +1292,8 @@ function renderUsage() {
     return;
   }
   const now = Date.now();
-  const segments = usageSegments(samples);
-  const metrics = [];
-  for (const segment of segments) if (segment.metric !== "short" && !metrics.includes(segment.metric)) metrics.push(segment.metric);
-  metrics.sort((a, b) => (a === "week" ? -1 : b === "week" ? 1 : a.localeCompare(b)));
+  const segments = currentSegments();
+  const metrics = usageMetrics(segments);
   const metric = metrics.includes(usageView.metric) ? usageView.metric : metrics[0] || "week";
   const unit = metric === "week" ? "one account's weekly limit" : "one account's " + usageMetricName(metric);
 
@@ -1196,67 +1346,38 @@ function renderUsage() {
     left += latest.reset && latest.reset <= now ? 100 : 100 - clamp(latest.used, 0, 100);
     counted++;
   }
-  const stat = (label, value, sub, tip) => '<div class="ov-stat" data-tip="' + esc(tip) + '"><div class="k">' + label + '</div><div class="v">' + value + '</div><div class="s">' + sub + "</div></div>";
+  const stat = (label, value, sub, tip) => '<div class="ov-stat" data-tip="' + esc(tip) + '"><div class="cap">' + label + '</div><div class="vs"><span class="v">' + value + '</span><span class="s">' + sub + "</span></div></div>";
   const stats =
     stat("Last 24 h", fmtPoints(dayTotal), "points", "Consumed in the last 24 hours on all accounts: " + fmtPoints(dayTotal) + " points, which is " + fmtPoints(dayTotal / 100) + " times " + unit + (tracked < 23.5 ? ". Tracked for " + fmtPoints(tracked) + " of these hours so far." : ".")) +
     stat("Per hour", tracked >= 0.25 ? fmtPoints(dayTotal / tracked) : "&ndash;", "average", "Average points per hour over the last " + fmtPoints(tracked) + " hours.") +
     stat("Busiest", fmtPoints(peak.total), esc(new Date(peak.start).toLocaleDateString([], { weekday: "short" }) + " " + hourLabel(peak.start)), "The busiest " + (bucketHours === 1 ? "hour" : bucketHours + " hours") + " in the chart: " + fmtPoints(peak.total) + " points from " + dayLabel(peak.start) + ", " + hourLabel(peak.start) + ".") +
     stat("Left now", fmtPoints(left), counted + (counted === 1 ? " account" : " accounts"), "Unused points on the accounts that are switched on, from their latest reading.");
 
-  // forecast
-  const lookback = Number(usageView.lookback) || 6;
-  const pace = (Number(usageView.pace) || 100) / 100;
-  const rows = [];
-  for (const provider of groups) {
-    const providerMetrics = metrics.filter((entry) => segments.some((segment) => segment.provider === provider && segment.metric === entry));
-    for (const entry of providerMetrics) {
-      const f = usageForecast(segments, samples, lastData ? lastData.accounts : [], provider, entry, lookback, pace, now);
-      if (!f.accounts) continue;
-      let kind = "good", icon = "&#10003;", main, sub = "";
-      if (f.rate === null) { kind = "off"; icon = "&#8943;"; main = "Not enough readings yet"; }
-      else if (!(f.rate > 0)) { main = "Nothing consumed in this time"; }
-      else if (f.runOut) {
-        const hours = (f.runOut - now) / 3600000;
-        kind = hours <= 24 ? "critical" : "warning";
-        icon = hours <= 24 ? "&#10005;" : "&#9650;";
-        main = "Runs out " + esc(fmtWhen(f.runOut)) + " &middot; in " + esc(fmtDuration(f.runOut - now));
-        sub = f.refill ? "Next refill " + esc(fmtWhen(f.refill)) + ", " + esc(fmtDuration(f.refill - f.runOut)) + " later" : "";
-      } else if (f.needed > f.accounts) { main = "Lasts longer than 14 days"; sub = "but the resets do not keep up in the long run"; }
-      else { main = "Enough at this pace"; sub = "the resets keep up"; }
-      const need = f.rate > 0 ? '<div class="fc-main"><strong class="num">' + f.needed + "</strong> " + (f.needed === 1 ? "account" : "accounts") + ' needed</div><div class="fc-sub">' + f.accounts + " switched on</div>" : "";
-      rows.push('<div class="fc-row" data-provider="' + esc(provider) + '"><div class="fc-name"><span class="dot"></span>' + esc(providerName(provider)) + ' <span class="secondary">' + esc(usageMetricName(entry).toLowerCase()) + "</span></div>" +
-        '<div class="fc-pace"><div class="fc-main"><strong class="num">' + (f.rate === null ? "&ndash;" : fmtPoints(f.rate)) + '</strong> points/h</div><div class="fc-sub"><span class="num">' + fmtPoints(f.left) + "</span> left</div></div>" +
-        '<div class="fc-verdict result ' + kind + '"><span class="ico">' + icon + '</span><div><div class="fc-main">' + main + "</div>" + (sub ? '<div class="fc-sub">' + sub + "</div>" : "") + "</div></div>" +
-        '<div class="fc-need" data-tip="Accounts needed to keep this pace up without running out, counting the resets.">' + need + "</div></div>");
-    }
-  }
-  const trackedHours = (now - samples[0].t * 1000) / 3600000;
-  const forecast = '<div class="fc"><div class="fc-head"><h3>Forecast</h3><label for="usage-lookback">at the pace of the last</label>' +
-    usageSelect("lookback", [[1, "1 hour"], [3, "3 hours"], [6, "6 hours"], [12, "12 hours"], [24, "24 hours"], [72, "3 days"], [168, "7 days"]], lookback, "Hours the pace is taken from") +
-    '<label for="usage-pace">at</label>' + usageSelect("pace", [[50, "50%"], [75, "75%"], [100, "100%"], [125, "125%"], [150, "150%"], [200, "200%"]], Math.round(pace * 100), "Share of that pace") + "<span>of it</span>" +
-    (trackedHours < lookback ? '<span class="muted">&middot; only ' + esc(fmtDuration(trackedHours * 3600000)) + " recorded so far</span>" : "") + "</div>" +
-    (rows.join("") || '<div class="fc-sub" style="margin-top:8px">No account that is switched on has a reading yet.</div>') + "</div>";
-
   box.innerHTML = '<div class="usage-controls">' + usageSeg("metric", metrics.map((entry) => [entry, usageMetricName(entry)]), metric) + usageSeg("range", [[24, "24 h"], [72, "3 days"], [168, "7 days"]], range) + "</div>" +
     '<div class="ov-stats">' + stats + "</div>" +
     '<div class="uc-wrap"><div class="uc' + (count > 60 ? " dense" : "") + '" role="img" aria-label="' + esc("Points consumed per " + (bucketHours === 1 ? "hour" : bucketHours + " hours") + " over the last " + range + " hours") + '">' + grid + slots + '</div><div class="uc-axis">' + axis + "</div></div>" +
     '<div class="uc-note"><span>Points per ' + (bucketHours === 1 ? "hour" : bucketHours + " hours") + ". 1 point is 1% of " + esc(unit) + ".</span><span class=\"keys\">" +
     groups.filter((provider) => buckets.some((bucket) => bucket.byProvider[provider] > 0)).map((provider) => '<span class="key" data-provider="' + esc(provider) + '"><span class="dot"></span>' + esc(providerName(provider)) + "</span>").join("") +
-    (anyEstimated ? '<span class="key"><span class="dot faint"></span>Estimated from request counts</span>' : "") + (anyReset ? '<span class="key"><span class="dot round"></span>Reset used</span>' : "") + "</span></div>" + forecast;
+    (anyEstimated ? '<span class="key"><span class="dot faint"></span>Estimated from request counts</span>' : "") + (anyReset ? '<span class="key"><span class="dot round"></span>Reset used</span>' : "") + "</span></div>";
 }
 function setUsageView(name, value) {
   if (!(name in usageView)) return;
   usageView[name] = name === "metric" ? String(value) : Number(value);
   try { localStorage.setItem(USAGE_VIEW_STORE, JSON.stringify(usageView)); } catch (e) {}
-  renderUsage();
+  render();
 }
+// The chart's limit and range are chosen in the consumption panel, the forecast's pace in
+// the overview.
 $("usage").addEventListener("click", (event) => {
   const button = event.target.closest ? event.target.closest("button[data-usage]") : null;
   if (button) setUsageView(button.getAttribute("data-usage"), button.getAttribute("data-value"));
 });
-$("usage").addEventListener("change", (event) => {
+$("overview").addEventListener("change", (event) => {
   const select = event.target;
-  if (select && select.getAttribute && select.getAttribute("data-usage")) { setUsageView(select.getAttribute("data-usage"), select.value); if (select.blur) select.blur(); }
+  if (!select || !select.getAttribute || !select.getAttribute("data-usage")) return;
+  // Leave the list first: the overview is not redrawn while one of its lists has the focus.
+  if (select.blur) select.blur();
+  setUsageView(select.getAttribute("data-usage"), select.value);
 });
 // A reading outside the schedule, taken around a reset so the reset hides no consumption.
 async function collectUsageNow(reason) {
@@ -1348,14 +1469,15 @@ async function refresh() {
 function render() {
   if (!lastData) return;
   const log = parseLog(lastData.accounts);
-  renderOverview(lastData.accounts, lastData.config, log);
-  // Do not redraw the consumption panel while one of its lists is open.
+  // Do not redraw the overview while one of the forecast's lists is open.
   const choosing = document.activeElement && document.activeElement.tagName === "SELECT" && document.activeElement.getAttribute("data-usage");
-  if (!choosing) renderUsage();
+  if (!choosing) renderOverview(lastData.accounts, lastData.config, log);
+  renderUsage();
   renderTiles(lastData.accounts, lastData.config);
   // Do not redraw the cards while a weight is being typed.
   const editing = document.activeElement && document.activeElement.hasAttribute && document.activeElement.hasAttribute("data-weight-for");
   if (!editing) renderAccounts(lastData.accounts);
+  renderNow(lastData.accounts, lastData.config, log);
   renderActivity(lastData.accounts, log);
 }
 function showLogin(rejected) {
