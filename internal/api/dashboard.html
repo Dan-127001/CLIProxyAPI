@@ -125,8 +125,8 @@
   .rw-head select { height: 24px; padding: 0 4px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--raised); color: var(--text-primary); font: inherit; font-size: 12px; }
   .rw-empty { padding: 2px 0 8px; color: var(--text-muted); font-size: 13px; }
   .rw-row {
-    display: grid; grid-template-columns: 118px 132px minmax(0, 1fr); grid-template-areas: "name when track" "name when sub"; column-gap: 18px; row-gap: 4px; align-items: center;
-    padding: 8px 0; border-top: 1px solid var(--border);
+    display: grid; grid-template-columns: 118px 132px minmax(0, 1fr); grid-template-areas: "name when ticks" "name when track" "name when sub"; column-gap: 18px; row-gap: 3px; align-items: center;
+    padding: 6px 0 8px; border-top: 1px solid var(--border);
   }
   .rw-name { grid-area: name; display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13.5px; font-weight: 600; white-space: nowrap; }
   .rw-name .secondary { font-weight: 400; }
@@ -144,9 +144,8 @@
   .rw-day { width: 1px; background: var(--surface); }
   .rw-sub { grid-area: sub; color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .rw-sub .num { color: var(--text-secondary); }
-  .rw-row.rw-axis { grid-template-areas: ". . ticks"; padding: 0 0 4px; border-top: 0; }
-  .rw-ticks { grid-area: ticks; position: relative; height: 14px; margin-top: -4px; color: var(--text-muted); font-family: var(--font-data); font-size: 10.5px; }
-  .rw-ticks span { position: absolute; top: 0; white-space: nowrap; }
+  .rw-ticks { grid-area: ticks; position: relative; height: 12px; color: var(--text-muted); font-family: var(--font-data); font-size: 10px; line-height: 12px; }
+  .rw-ticks span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
 
   /* accounts: one line each */
   .ov-usage { margin-top: 4px; border-top: 1px solid var(--border-strong); }
@@ -376,11 +375,9 @@
     main { padding-block: 12px 40px; }
     .overview { margin-top: 12px; padding: 12px 12px 6px; }
     .cap { font-size: 9.5px; letter-spacing: 0.03em; }
-    .rw-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name when" "track track" "sub sub"; row-gap: 5px; }
+    .rw-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name when" "ticks ticks" "track track" "sub sub"; row-gap: 3px; }
     .rw-when { display: flex; flex-direction: row-reverse; align-items: baseline; gap: 8px; }
     .rw-sub { white-space: normal; }
-    .rw-row.rw-axis { grid-template-areas: "ticks ticks"; }
-    .rw-ticks { margin-top: -3px; }
     .ov-row { grid-template-columns: minmax(0, 1fr) repeat(3, 48px) 30px 30px; column-gap: 7px; min-height: 0; padding: 5px 0; }
     .ov-new .pair { grid-template-columns: 30px 30px; column-gap: 7px; }
     .ov-state { display: none; }
@@ -833,8 +830,8 @@ function shareCell(mine, what) {
   return '<div class="ov-share' + part.cls + '" data-tip="' + esc(part.tip) + '">' + esc(part.text) + "</div>";
 }
 // The forecast: one line per provider and limit with the time until it runs out, and the
-// next seven days on one shared axis (in the provider's colour while quota lasts, hatched
-// red while every account is used up).
+// next seven days as a bar (in the provider's colour while quota lasts, hatched red while
+// every account is used up) with the weekdays above it.
 function renderRunway(accounts, groups, now) {
   if (!usageHistory.supported) return "";
   const samples = usageHistory.samples;
@@ -856,6 +853,12 @@ function renderRunway(accounts, groups, now) {
     if (day.getTime() < end) midnights.push(day.getTime());
   }
   const dayLines = midnights.map((ms) => '<span class="rw-day" style="left:' + at(ms).toFixed(2) + '%"></span>').join("");
+  // Each day's name over the middle of its stretch; today and the last day only where they have the room.
+  const edges = [now].concat(midnights, [end]);
+  const days = '<div class="rw-ticks" aria-hidden="true">' + edges.slice(0, -1).map((from, i) => {
+    const left = at(from), width = at(edges[i + 1]) - left;
+    return width < 5 ? "" : '<span style="left:' + (left + width / 2).toFixed(2) + '%">' + esc(new Date(from).toLocaleDateString([], { weekday: "short" })) + "</span>";
+  }).join("") + "</div>";
   const rows = [];
   for (const [provider] of groups) {
     for (const metric of usageMetrics(segments, provider)) {
@@ -887,7 +890,7 @@ function renderRunway(accounts, groups, now) {
         (f.rate > 0 ? ' &middot; <span class="num">' + f.needed + "</span> " + (f.needed === 1 ? "account" : "accounts") + " needed for this pace" : "");
       rows.push('<div class="rw-row ' + kind + '" data-provider="' + esc(provider) + '"><div class="rw-name"><span class="dot"></span>' + esc(providerName(provider)) + ' <span class="secondary">' + esc(metric === "week" ? "Week" : metric.slice(6)) + "</span></div>" +
         '<div class="rw-when"><div class="rw-big">' + esc(big) + '</div><div class="rw-at">' + esc(when) + "</div></div>" +
-        '<div class="rw-track" role="img" aria-label="' + esc(trackTip) + '" data-tip="' + esc(trackTip) + '">' + track + dayLines + "</div>" +
+        days + '<div class="rw-track" role="img" aria-label="' + esc(trackTip) + '" data-tip="' + esc(trackTip) + '">' + track + dayLines + "</div>" +
         '<div class="rw-sub" data-tip="1 point is 1% of one account\'s limit. Accounts needed: how many keep this pace up without running out, counting their resets.">' + sub + "</div></div>");
     }
   }
@@ -898,9 +901,7 @@ function renderRunway(accounts, groups, now) {
     usageSelect("lookback", [[1, "1 hour"], [3, "3 hours"], [6, "6 hours"], [12, "12 hours"], [24, "24 hours"], [72, "3 days"], [168, "7 days"]], lookback, "Hours the pace is taken from") +
     (trackedHours < lookback ? "<span>&middot; only " + esc(fmtDuration(trackedHours * 3600000)) + " recorded so far</span>" : "") + "</div>";
   if (!rows.length) return '<div class="rw">' + head + '<div class="rw-empty">No account that is switched on has a usage reading yet.</div></div>';
-  const axis = '<div class="rw-row rw-axis"><div class="rw-ticks"><span style="left:0">now</span>' +
-    midnights.filter((ms) => at(ms) > 9 && at(ms) < 95).map((ms) => '<span style="left:' + at(ms).toFixed(2) + '%">' + esc(new Date(ms).toLocaleDateString([], { weekday: "short" })) + "</span>").join("") + "</div></div>";
-  return '<div class="rw">' + head + rows.join("") + axis + "</div>";
+  return '<div class="rw">' + head + rows.join("") + "</div>";
 }
 function renderOverview(accounts, config, log) {
   const now = Date.now();
